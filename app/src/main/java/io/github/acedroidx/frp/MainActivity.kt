@@ -89,8 +89,8 @@ class MainActivity : ComponentActivity() {
     private val frpcConfigList = MutableStateFlow<List<FrpConfig>>(emptyList())
     private val frpsConfigList = MutableStateFlow<List<FrpConfig>>(emptyList())
     private val runningConfigList = MutableStateFlow<List<FrpConfig>>(emptyList())
-    private val frpVersion = MutableStateFlow("Loading...")
-    private val themeMode = MutableStateFlow("跟随系统")
+    private val frpVersion = MutableStateFlow("")
+    private val themeMode = MutableStateFlow("")
     private val permissionGranted = MutableStateFlow(true)
 
     private lateinit var preferences: SharedPreferences
@@ -170,6 +170,8 @@ class MainActivity : ComponentActivity() {
         }
 
         preferences = getSharedPreferences("data", MODE_PRIVATE)
+        val darkLabel = getString(R.string.theme_mode_dark)
+        val lightLabel = getString(R.string.theme_mode_light)
 
         // 应用"最近任务中排除"设置
         val excludeFromRecents = preferences.getBoolean(PreferencesKey.EXCLUDE_FROM_RECENTS, false)
@@ -187,9 +189,19 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        val loadingText = getString(R.string.loading)
+        val followSystem = getString(R.string.theme_mode_follow_system)
         isStartup.value = preferences.getBoolean(PreferencesKey.AUTO_START, false)
-        frpVersion.value = preferences.getString(PreferencesKey.FRP_VERSION, "Loading...") ?: "Loading..."
-        themeMode.value = preferences.getString(PreferencesKey.THEME_MODE, "跟随系统") ?: "跟随系统"
+        frpVersion.value =
+            preferences.getString(PreferencesKey.FRP_VERSION, loadingText) ?: loadingText
+        val rawTheme =
+            preferences.getString(PreferencesKey.THEME_MODE, followSystem) ?: followSystem
+        themeMode.value = when (rawTheme) {
+            darkLabel, "深色", "Dark" -> darkLabel
+            lightLabel, "浅色", "Light" -> lightLabel
+            followSystem, "跟随系统", "Follow system" -> followSystem
+            else -> rawTheme
+        }
 
         checkConfig()
         updateConfigList()
@@ -198,45 +210,47 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
-            val currentTheme by themeMode.collectAsStateWithLifecycle("跟随系统")
+            val currentTheme by themeMode.collectAsStateWithLifecycle(followSystem)
             val openDialog = remember { mutableStateOf(false) }
             val snackbarHostState = remember { SnackbarHostState() }
             val permissionGranted by permissionGranted.collectAsStateWithLifecycle(true)
 
             FrpTheme(themeMode = currentTheme) {
-                val frpVersion by frpVersion.collectAsStateWithLifecycle("Loading...")
-                Scaffold(
-                    topBar = {
-                        TopAppBar(
-                            title = {
-                                Text("frp for Android - ${BuildConfig.VERSION_NAME}/$frpVersion")
-                            },
-                            actions = {
-                                IconButton(onClick = {
-                                    startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
-                                }) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_settings_24dp),
-                                        contentDescription = "设置"
-                                    )
-                                }
-                            }
+                val frpVersion by frpVersion.collectAsStateWithLifecycle(loadingText)
+                Scaffold(topBar = {
+                    TopAppBar(title = {
+                        Text(
+                            stringResource(
+                                R.string.frp_for_android_version,
+                                BuildConfig.VERSION_NAME,
+                                frpVersion
+                            )
                         )
-                    },
-                    floatingActionButton = {
-                        FloatingActionButton(
-                            onClick = { openDialog.value = true }
-                        ) {
+                    }, actions = {
+                        IconButton(onClick = {
+                            startActivity(
+                                Intent(
+                                    this@MainActivity, SettingsActivity::class.java
+                                )
+                            )
+                        }) {
                             Icon(
-                                painter = painterResource(id = android.R.drawable.ic_input_add),
-                                contentDescription = stringResource(R.string.addConfigButton)
+                                painter = painterResource(id = R.drawable.ic_settings_24dp),
+                                contentDescription = stringResource(R.string.content_desc_settings)
                             )
                         }
-                    },
-                    snackbarHost = {
-                        SnackbarHost(hostState = snackbarHostState)
+                    })
+                }, floatingActionButton = {
+                    FloatingActionButton(
+                        onClick = { openDialog.value = true }) {
+                        Icon(
+                            painter = painterResource(id = android.R.drawable.ic_input_add),
+                            contentDescription = stringResource(R.string.addConfigButton)
+                        )
                     }
-                ) { contentPadding ->
+                }, snackbarHost = {
+                    SnackbarHost(hostState = snackbarHostState)
+                }) { contentPadding ->
                     // Screen content
                     Box(
                         modifier = Modifier
@@ -255,19 +269,24 @@ class MainActivity : ComponentActivity() {
 
                 // 显示权限提示
                 val scope = rememberCoroutineScope()
+                val notificationPermissionMessage =
+                    stringResource(R.string.notification_permission_denied_message)
+                val notificationPermissionAction =
+                    stringResource(R.string.notification_permission_action_settings)
                 LaunchedEffect(permissionGranted) {
                     if (!permissionGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         scope.launch {
                             val result = snackbarHostState.showSnackbar(
-                                message = "通知权限未授予，后台运行通知将无法显示",
-                                actionLabel = "去设置",
+                                message = notificationPermissionMessage,
+                                actionLabel = notificationPermissionAction,
                                 withDismissAction = true
                             )
                             if (result == SnackbarResult.ActionPerformed) {
                                 // 跳转到应用设置页面
-                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                    data = Uri.fromParts("package", packageName, null)
-                                }
+                                val intent =
+                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = Uri.fromParts("package", packageName, null)
+                                    }
                                 startActivity(intent)
                             }
                         }
@@ -300,11 +319,15 @@ class MainActivity : ComponentActivity() {
                 )
             }
             if (frpcConfigList.isNotEmpty()) {
-                Text("frpc", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    stringResource(R.string.frpc_label), style = MaterialTheme.typography.titleLarge
+                )
             }
             frpcConfigList.forEach { config -> FrpConfigItem(config) }
             if (frpsConfigList.isNotEmpty()) {
-                Text("frps", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    stringResource(R.string.frps_label), style = MaterialTheme.typography.titleLarge
+                )
             }
             frpsConfigList.forEach { config -> FrpConfigItem(config) }
         }
@@ -321,7 +344,9 @@ class MainActivity : ComponentActivity() {
         val configLogs by if (mBound) {
             mService.configLogs.collectAsStateWithLifecycle(emptyMap())
         } else {
-            remember { MutableStateFlow(emptyMap<FrpConfig, String>()) }.collectAsStateWithLifecycle(emptyMap())
+            remember { MutableStateFlow(emptyMap<FrpConfig, String>()) }.collectAsStateWithLifecycle(
+                emptyMap()
+            )
         }
 
         val configLog = configLogs[config] ?: ""
@@ -351,8 +376,7 @@ class MainActivity : ComponentActivity() {
                             mService.getConfigLog(config)
                         }
                     }
-                }
-            ) {
+                }) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -365,7 +389,7 @@ class MainActivity : ComponentActivity() {
                         Text(config.fileName)
                         if (isRunning) {
                             Text(
-                                "运行中",
+                                stringResource(R.string.config_running),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -384,20 +408,18 @@ class MainActivity : ComponentActivity() {
                     ) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_pencil_24dp),
-                            contentDescription = "编辑",
+                            contentDescription = stringResource(R.string.content_desc_edit),
                             modifier = Modifier.size(28.dp)
                         )
                     }
                     IconButton(
                         onClick = {
                             showDeleteDialog.value = true
-                        },
-                        enabled = !isRunning,
-                        modifier = Modifier.size(32.dp,28.dp)
+                        }, enabled = !isRunning, modifier = Modifier.size(32.dp, 28.dp)
                     ) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_baseline_delete_24),
-                            contentDescription = "删除配置",
+                            contentDescription = stringResource(R.string.content_desc_delete_config),
                             modifier = Modifier.size(28.dp)
                         )
                     }
@@ -415,27 +437,21 @@ class MainActivity : ComponentActivity() {
 
             // 可折叠的日志视图
             AnimatedVisibility(
-                visible = showLog.value,
-                enter = expandVertically(
+                visible = showLog.value, enter = expandVertically(
                     animationSpec = tween(
-                        durationMillis = 300,
-                        easing = FastOutSlowInEasing
+                        durationMillis = 300, easing = FastOutSlowInEasing
                     )
                 ) + fadeIn(
                     animationSpec = tween(
-                        durationMillis = 300,
-                        easing = FastOutSlowInEasing
+                        durationMillis = 300, easing = FastOutSlowInEasing
                     )
-                ),
-                exit = shrinkVertically(
+                ), exit = shrinkVertically(
                     animationSpec = tween(
-                        durationMillis = 250,
-                        easing = FastOutSlowInEasing
+                        durationMillis = 250, easing = FastOutSlowInEasing
                     )
                 ) + fadeOut(
                     animationSpec = tween(
-                        durationMillis = 250,
-                        easing = FastOutSlowInEasing
+                        durationMillis = 250, easing = FastOutSlowInEasing
                     )
                 )
             ) {
@@ -455,7 +471,7 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                "配置日志",
+                                stringResource(R.string.config_log_title),
                                 style = MaterialTheme.typography.titleSmall
                             )
                             Button(
@@ -463,11 +479,10 @@ class MainActivity : ComponentActivity() {
                                     if (mBound) {
                                         mService.clearConfigLog(config)
                                     }
-                                },
-                                modifier = Modifier.size(width = 80.dp, height = 35.dp)
+                                }, modifier = Modifier.size(width = 80.dp, height = 35.dp)
                             ) {
                                 Text(
-                                    "清除",
+                                    stringResource(R.string.deleteButton),
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             }
@@ -475,7 +490,7 @@ class MainActivity : ComponentActivity() {
                         SelectionContainer {
                             Text(
                                 text = configLog.ifEmpty {
-                                    "暂无日志"
+                                    stringResource(R.string.no_log)
                                 },
                                 style = MaterialTheme.typography.bodySmall.merge(fontFamily = FontFamily.Monospace),
                                 modifier = Modifier.padding(vertical = 4.dp)
@@ -490,26 +505,23 @@ class MainActivity : ComponentActivity() {
         if (showDeleteDialog.value) {
             AlertDialog(
                 onDismissRequest = { showDeleteDialog.value = false },
-                title = { Text("确认删除") },
-                text = { Text("确认删除 ${config.fileName} 吗？") },
+                title = { Text(stringResource(R.string.confirm_delete_title)) },
+                text = { Text(stringResource(R.string.confirm_delete_message, config.fileName)) },
                 confirmButton = {
                     TextButton(
                         onClick = {
                             deleteConfig(config)
                             showDeleteDialog.value = false
-                        }
-                    ) {
-                        Text("删除")
+                        }) {
+                        Text(stringResource(R.string.deleteConfigButton))
                     }
                 },
                 dismissButton = {
                     TextButton(
-                        onClick = { showDeleteDialog.value = false }
-                    ) {
-                        Text("取消")
+                        onClick = { showDeleteDialog.value = false }) {
+                        Text(stringResource(R.string.dismiss))
                     }
-                }
-            )
+                })
         }
     }
 
@@ -538,11 +550,11 @@ class MainActivity : ComponentActivity() {
                         horizontalArrangement = Arrangement.SpaceAround,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Button(onClick = { startConfigActivity(FrpType.FRPC);onClose() }) {
-                            Text("frpc")
+                        Button(onClick = { startConfigActivity(FrpType.FRPC); onClose() }) {
+                            Text(stringResource(R.string.frpc_label))
                         }
-                        Button(onClick = { startConfigActivity(FrpType.FRPS);onClose() }) {
-                            Text("frps")
+                        Button(onClick = { startConfigActivity(FrpType.FRPS); onClose() }) {
+                            Text(stringResource(R.string.frps_label))
                         }
                     }
                 }
@@ -553,8 +565,17 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         // 从 SharedPreferences 重新加载主题设置
-        val savedTheme = preferences.getString(PreferencesKey.THEME_MODE, "跟随系统") ?: "跟随系统"
-        themeMode.value = savedTheme
+        val darkLabel = getString(R.string.theme_mode_dark)
+        val lightLabel = getString(R.string.theme_mode_light)
+        val followSystem = getString(R.string.theme_mode_follow_system)
+        val savedTheme =
+            preferences.getString(PreferencesKey.THEME_MODE, followSystem) ?: followSystem
+        themeMode.value = when (savedTheme) {
+            darkLabel, "深色", "Dark" -> darkLabel
+            lightLabel, "浅色", "Light" -> lightLabel
+            followSystem, "跟随系统", "Follow system" -> followSystem
+            else -> savedTheme
+        }
 
         // 重新应用"最近任务中排除"设置
         val excludeFromRecents = preferences.getBoolean(PreferencesKey.EXCLUDE_FROM_RECENTS, false)
@@ -575,8 +596,7 @@ class MainActivity : ComponentActivity() {
         // 重新检查权限状态（用户可能从设置页面返回）
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val hasNotificationPermission = ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.POST_NOTIFICATIONS
+                this, Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED
             permissionGranted.value = hasNotificationPermission
         }
@@ -663,8 +683,7 @@ class MainActivity : ComponentActivity() {
         // Android 13 及以上需要通知权限
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val hasNotificationPermission = ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.POST_NOTIFICATIONS
+                this, Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED
 
             permissionGranted.value = hasNotificationPermission

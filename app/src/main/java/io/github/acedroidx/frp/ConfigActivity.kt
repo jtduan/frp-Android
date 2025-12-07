@@ -51,8 +51,8 @@ import java.io.File
 class ConfigActivity : ComponentActivity() {
     private val configEditText = MutableStateFlow("")
     private val isAutoStart = MutableStateFlow(false)
-    private val frpVersion = MutableStateFlow("Loading...")
-    private val themeMode = MutableStateFlow("跟随系统")
+    private val frpVersion = MutableStateFlow("")
+    private val themeMode = MutableStateFlow("")
     private lateinit var configFile: File
     private lateinit var autoStartPreferencesKey: String
     private lateinit var preferences: SharedPreferences
@@ -68,7 +68,8 @@ class ConfigActivity : ComponentActivity() {
         }
         if (frpConfig == null) {
             Log.e("adx", "frp config is null")
-            Toast.makeText(this, "frp config is null", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_frp_config_null), Toast.LENGTH_SHORT)
+                .show()
             setResult(RESULT_CANCELED)
             finish()
             return
@@ -76,30 +77,45 @@ class ConfigActivity : ComponentActivity() {
         configFile = frpConfig.getFile(this)
         autoStartPreferencesKey = frpConfig.type.getAutoStartPreferencesKey()
         preferences = getSharedPreferences("data", MODE_PRIVATE)
-        frpVersion.value = preferences.getString(PreferencesKey.FRP_VERSION, "Loading...") ?: "Loading..."
-        themeMode.value = preferences.getString(PreferencesKey.THEME_MODE, "跟随系统") ?: "跟随系统"
+        val loadingText = getString(R.string.loading)
+        val followSystem = getString(R.string.theme_mode_follow_system)
+        val darkLabel = getString(R.string.theme_mode_dark)
+        val lightLabel = getString(R.string.theme_mode_light)
+        frpVersion.value =
+            preferences.getString(PreferencesKey.FRP_VERSION, loadingText) ?: loadingText
+        val rawTheme =
+            preferences.getString(PreferencesKey.THEME_MODE, followSystem) ?: followSystem
+        themeMode.value = when (rawTheme) {
+            darkLabel, "深色", "Dark" -> darkLabel
+            lightLabel, "浅色", "Light" -> lightLabel
+            followSystem, "跟随系统", "Follow system" -> followSystem
+            else -> rawTheme
+        }
         readConfig()
         readIsAutoStart()
 
         enableEdgeToEdge()
         setContent {
-            val currentTheme by themeMode.collectAsStateWithLifecycle("跟随系统")
+            val currentTheme by themeMode.collectAsStateWithLifecycle(followSystem)
             FrpTheme(themeMode = currentTheme) {
-                val frpVersion by frpVersion.collectAsStateWithLifecycle("Loading...")
+                val frpVersion by frpVersion.collectAsStateWithLifecycle(loadingText)
                 Scaffold(topBar = {
-                    TopAppBar(
-                        title = {
-                            Text("frp for Android - ${BuildConfig.VERSION_NAME}/$frpVersion")
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = { closeActivity() }) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_arrow_back_24dp),
-                                    contentDescription = "返回"
-                                )
-                            }
+                    TopAppBar(title = {
+                        Text(
+                            stringResource(
+                                R.string.frp_for_android_version,
+                                BuildConfig.VERSION_NAME,
+                                frpVersion
+                            )
+                        )
+                    }, navigationIcon = {
+                        IconButton(onClick = { closeActivity() }) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_arrow_back_24dp),
+                                contentDescription = stringResource(R.string.content_desc_back)
+                            )
                         }
-                    )
+                    })
                 }) { contentPadding ->
                     // Screen content
                     MainContent(contentPadding)
@@ -131,7 +147,7 @@ class ConfigActivity : ComponentActivity() {
                     .fillMaxWidth()
                     .padding(12.dp)
             ) {
-                Button(onClick = { saveConfig();closeActivity() }) {
+                Button(onClick = { saveConfig(); closeActivity() }) {
                     Text(stringResource(R.string.saveConfigButton))
                 }
                 Button(onClick = { closeActivity() }) {
@@ -149,7 +165,8 @@ class ConfigActivity : ComponentActivity() {
                     .padding(horizontal = 12.dp)
             ) {
                 Text(stringResource(R.string.auto_start_switch))
-                Switch(checked = isAutoStart.collectAsStateWithLifecycle(false).value,
+                Switch(
+                    checked = isAutoStart.collectAsStateWithLifecycle(false).value,
                     onCheckedChange = { setAutoStart(it) })
             }
             TextField(
@@ -178,7 +195,8 @@ class ConfigActivity : ComponentActivity() {
             Text(stringResource(R.string.rename))
         }, icon = {
             Icon(
-                painterResource(id = R.drawable.ic_rename), contentDescription = "Rename Icon"
+                painterResource(id = R.drawable.ic_rename),
+                contentDescription = stringResource(R.string.content_desc_rename_icon)
             )
         }, text = {
             TextField(text, onValueChange = { text = it })
@@ -213,7 +231,8 @@ class ConfigActivity : ComponentActivity() {
             configEditText.value = mRespBuff.toString()
         } else {
             Log.e("adx", "config file is not exist")
-            Toast.makeText(this, "config file is not exist", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_config_not_exist), Toast.LENGTH_SHORT)
+                .show()
         }
     }
 

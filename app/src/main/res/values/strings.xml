@@ -1,6 +1,11 @@
 <resources>
     <string name="app_name" translatable="false">frp</string>
     <string name="frp_for_android" translatable="false">frp for Android</string>
+    <string name="frp_for_android_version">frp for Android - %1$s/%2$s</string>
+    <string name="loading">Loading...</string>
+    <string name="content_desc_back">Back</string>
+    <string name="content_desc_settings">Settings</string>
+    <string name="content_desc_rename_icon">Rename icon</string>
     <string name="auto_start_switch">Startup at Boot</string>
     <string name="addConfigButton">Add Config</string>
     <string name="aboutButton">About</string>
@@ -39,5 +44,32 @@
     <string name="quick_tile_not_configured">Not Configured</string>
     <string name="quick_tile_running">Running</string>
     <string name="quick_tile_stopped">Stopped</string>
-    <string name="quick_tile_not_configured_toast" >No Quick Tile Config selected. Please go to \"Settings - Quick Tile Config\" to select the frp configuration you want to start.</string>
+    <string name="quick_tile_not_configured_toast">No Quick Tile Config selected. Please go to \"Settings - Quick Tile Config\" to select the frp configuration you want to start.</string>
+    <string name="about_app_author">App author (AceDroidX):</string>
+    <string name="about_contributors">Special thanks to the following contributors:</string>
+    <string name="about_contributor_ahsaboy">ahsaboy: added app icon, quick toggle, Tasker integration, and many optimizations</string>
+    <string name="about_contributor_z156854666">z156854666: added support for starting multiple frpc instances simultaneously</string>
+    <string name="about_frp_author">frp author (fatedier):</string>
+    <string name="settings_title">Settings</string>
+    <string name="theme_mode_title">Theme mode</string>
+    <string name="theme_mode_dark">Dark</string>
+    <string name="theme_mode_light">Light</string>
+    <string name="theme_mode_follow_system">Follow system</string>
+    <string name="allow_tasker_title">Allow Tasker</string>
+    <string name="exclude_from_recents_title">Exclude from recents</string>
+    <string name="notification_permission_denied_message">Notification permission is not granted, background notifications will not be shown.</string>
+    <string name="notification_permission_action_settings">Open settings</string>
+    <string name="config_display_value">%1$s: %2$s</string>
+    <string name="frpc_label">frpc</string>
+    <string name="frps_label">frps</string>
+    <string name="config_running">Running</string>
+    <string name="content_desc_edit">Edit</string>
+    <string name="content_desc_delete_config">Delete config</string>
+    <string name="config_log_title">Config log</string>
+    <string name="confirm_delete_title">Confirm delete</string>
+    <string name="confirm_delete_message">Delete %1$s?</string>
+    <string name="toast_all_configs_stopped">All configurations stopped</string>
+    <string name="toast_frp_config_null">frp config is null</string>
+    <string name="toast_config_not_exist">Config file does not exist</string>
+    <string name="toast_frp_running">frp is already running</string>
 </resources>

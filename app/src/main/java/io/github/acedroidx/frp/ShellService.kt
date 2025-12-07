@@ -18,6 +18,7 @@ import java.io.File
 import java.io.FileWriter
 import java.io.BufferedReader
 import java.io.FileReader
+import java.util.Collections.emptyMap
 
 
 class ShellService : LifecycleService() {
@@ -191,7 +192,8 @@ class ShellService : LifecycleService() {
             }
             stopSelf()
 
-            Toast.makeText(this, "已停止所有配置", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_all_configs_stopped), Toast.LENGTH_SHORT)
+                .show()
 
             // 关闭应用
             val mainActivityIntent = Intent(this, MainActivity::class.java).apply {
@@ -199,7 +201,8 @@ class ShellService : LifecycleService() {
                 putExtra("EXIT_APP", true)
                 // 检查是否需要从最近任务中排除
                 val preferences = getSharedPreferences("data", MODE_PRIVATE)
-                val excludeFromRecents = preferences.getBoolean(PreferencesKey.EXCLUDE_FROM_RECENTS, false)
+                val excludeFromRecents =
+                    preferences.getBoolean(PreferencesKey.EXCLUDE_FROM_RECENTS, false)
                 if (excludeFromRecents) {
                     addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
                 }
@@ -219,7 +222,8 @@ class ShellService : LifecycleService() {
             }
         if (frpConfig == null) {
             Log.e("adx", "frpConfig is null")
-            Toast.makeText(this, "frpConfig is null", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_frp_config_null), Toast.LENGTH_SHORT)
+                .show()
             return START_NOT_STICKY
         }
         when (intent?.action) {
@@ -258,12 +262,13 @@ class ShellService : LifecycleService() {
         val file = config.getFile(this)
         if (!file.exists()) {
             Log.w("adx", "file is not exist,service won't start")
-            Toast.makeText(this, "file is not exist,service won't start", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_config_not_exist), Toast.LENGTH_SHORT)
+                .show()
             return
         }
         if (_processThreads.value.contains(config)) {
             Log.w("adx", "frp is already running")
-            Toast.makeText(this, "frp is already running", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_frp_running), Toast.LENGTH_SHORT).show()
             return
         }
         val ainfo = packageManager.getApplicationInfo(
@@ -298,7 +303,7 @@ class ShellService : LifecycleService() {
 //                it.value.interrupt()
                 it.value.stopProcess()
             }
-            _processThreads.update { it.clear();it }
+            _processThreads.update { emptyMap() }
         }
     }
 
@@ -316,7 +321,8 @@ class ShellService : LifecycleService() {
             Intent(this, MainActivity::class.java).let { notificationIntent ->
                 // 检查是否需要从最近任务中排除
                 val preferences = getSharedPreferences("data", MODE_PRIVATE)
-                val excludeFromRecents = preferences.getBoolean(PreferencesKey.EXCLUDE_FROM_RECENTS, false)
+                val excludeFromRecents =
+                    preferences.getBoolean(PreferencesKey.EXCLUDE_FROM_RECENTS, false)
                 if (excludeFromRecents) {
                     notificationIntent.addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
                 }
@@ -328,10 +334,7 @@ class ShellService : LifecycleService() {
             action = ShellServiceAction.STOP_ALL
         }
         val stopAllPendingIntent = PendingIntent.getService(
-            this,
-            0,
-            stopAllIntent,
-            PendingIntent.FLAG_IMMUTABLE
+            this, 0, stopAllIntent, PendingIntent.FLAG_IMMUTABLE
         )
 
         val notification = NotificationCompat.Builder(this, "shell_bg")
@@ -342,11 +345,8 @@ class ShellService : LifecycleService() {
                 )
             )
             //.setTicker("test")
-            .setContentIntent(pendingIntent)
-            .addAction(
-                R.drawable.ic_baseline_delete_24,
-                "停止",
-                stopAllPendingIntent
+            .setContentIntent(pendingIntent).addAction(
+                R.drawable.ic_baseline_delete_24, "停止", stopAllPendingIntent
             )
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             notification.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)

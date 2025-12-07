@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="frp_for_android_version">frp for Android - %1$s/%2$s</string>
+    <string name="loading">加载中...</string>
+    <string name="content_desc_back">返回</string>
+    <string name="content_desc_settings">设置</string>
+    <string name="content_desc_rename_icon">重命名图标</string>
     <string name="auto_start_switch">开机自启动</string>
     <string name="addConfigButton">添加配置</string>
     <string name="aboutButton">关于</string>
@@ -38,5 +43,32 @@
     <string name="quick_tile_not_configured">未配置</string>
     <string name="quick_tile_running">运行中</string>
     <string name="quick_tile_stopped">已停止</string>
-    <string name="quick_tile_not_configured_toast" >未选择快捷开关配置，请前往“设置-快捷开关配置”中选择需要启动的frp配置</string>
+    <string name="quick_tile_not_configured_toast">未选择快捷开关配置，请前往“设置-快捷开关配置”中选择需要启动的frp配置</string>
+    <string name="about_app_author">App 作者 (AceDroidX)：</string>
+    <string name="about_contributors">非常感谢以下作者对 App 开发所做的贡献：</string>
+    <string name="about_contributor_ahsaboy">ahsaboy: 添加应用图标、快捷开关、Tasker集成并优化了诸多功能</string>
+    <string name="about_contributor_z156854666">z156854666: 新增同时启动多个frpc功能</string>
+    <string name="about_frp_author">frp 作者 (fatedier)：</string>
+    <string name="settings_title">设置</string>
+    <string name="theme_mode_title">主题模式</string>
+    <string name="theme_mode_dark">深色</string>
+    <string name="theme_mode_light">浅色</string>
+    <string name="theme_mode_follow_system">跟随系统</string>
+    <string name="allow_tasker_title">允许 Tasker 调用</string>
+    <string name="exclude_from_recents_title">最近任务中排除</string>
+    <string name="notification_permission_denied_message">通知权限未授予，后台运行通知将无法显示</string>
+    <string name="notification_permission_action_settings">去设置</string>
+    <string name="config_display_value">%1$s：%2$s</string>
+    <string name="frpc_label">frpc</string>
+    <string name="frps_label">frps</string>
+    <string name="config_running">运行中</string>
+    <string name="content_desc_edit">编辑</string>
+    <string name="content_desc_delete_config">删除配置</string>
+    <string name="config_log_title">配置日志</string>
+    <string name="confirm_delete_title">确认删除</string>
+    <string name="confirm_delete_message">确认删除 %1$s 吗？</string>
+    <string name="toast_all_configs_stopped">已停止所有配置</string>
+    <string name="toast_frp_config_null">frp 配置为空</string>
+    <string name="toast_config_not_exist">配置文件不存在</string>
+    <string name="toast_frp_running">frp 正在运行</string>
 </resources>

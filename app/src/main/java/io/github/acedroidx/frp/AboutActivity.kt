@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -38,8 +39,8 @@ import io.github.acedroidx.frp.ui.theme.FrpTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class AboutActivity : ComponentActivity() {
-    private val frpVersion = MutableStateFlow("Loading...")
-    private val themeMode = MutableStateFlow("跟随系统")
+    private val frpVersion = MutableStateFlow("")
+    private val themeMode = MutableStateFlow("")
     private lateinit var preferences: SharedPreferences
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -47,35 +48,51 @@ class AboutActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         preferences = getSharedPreferences("data", MODE_PRIVATE)
-        frpVersion.value = preferences.getString(PreferencesKey.FRP_VERSION, "Loading...") ?: "Loading..."
-        themeMode.value = preferences.getString(PreferencesKey.THEME_MODE, "跟随系统") ?: "跟随系统"
+        val loadingText = getString(R.string.loading)
+        val followSystem = getString(R.string.theme_mode_follow_system)
+        val darkLabel = getString(R.string.theme_mode_dark)
+        val lightLabel = getString(R.string.theme_mode_light)
+        frpVersion.value =
+            preferences.getString(PreferencesKey.FRP_VERSION, loadingText) ?: loadingText
+        val rawTheme =
+            preferences.getString(PreferencesKey.THEME_MODE, followSystem) ?: followSystem
+        themeMode.value = when (rawTheme) {
+            darkLabel, "深色", "Dark" -> darkLabel
+            lightLabel, "浅色", "Light" -> lightLabel
+            followSystem, "跟随系统", "Follow system" -> followSystem
+            else -> rawTheme
+        }
 
         enableEdgeToEdge()
         setContent {
-            val currentTheme by themeMode.collectAsStateWithLifecycle("跟随系统")
+            val currentTheme by themeMode.collectAsStateWithLifecycle(followSystem)
             FrpTheme(themeMode = currentTheme) {
-                val frpVersion by frpVersion.collectAsStateWithLifecycle("Loading...")
+                val frpVersion by frpVersion.collectAsStateWithLifecycle(loadingText)
                 Scaffold(topBar = {
-                    TopAppBar(
-                        title = {
-                            Text("frp for Android - ${BuildConfig.VERSION_NAME}/$frpVersion")
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = { finish() }) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_arrow_back_24dp),
-                                    contentDescription = "返回"
-                                )
-                            }
+                    TopAppBar(title = {
+                        Text(
+                            stringResource(
+                                R.string.frp_for_android_version,
+                                BuildConfig.VERSION_NAME,
+                                frpVersion
+                            )
+                        )
+                    }, navigationIcon = {
+                        IconButton(onClick = { finish() }) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_arrow_back_24dp),
+                                contentDescription = stringResource(R.string.content_desc_back)
+                            )
                         }
-                    )
+                    })
                 }) { contentPadding ->
                     // Screen content
                     Box(
                         modifier = Modifier
                             .padding(contentPadding)
                             .verticalScroll(rememberScrollState())
-                            .scrollable(orientation = Orientation.Vertical,
+                            .scrollable(
+                                orientation = Orientation.Vertical,
                                 state = rememberScrollableState { delta -> 0f })
                     ) {
                         MainContent()
@@ -90,10 +107,12 @@ class AboutActivity : ComponentActivity() {
     fun MainContent() {
         val uriHandler = LocalUriHandler.current
         Column(
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.padding(16.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(16.dp)
         ) {
-            Text("App 作者 (AceDroidX)：", style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.about_app_author),
+                style = MaterialTheme.typography.titleMedium
+            )
             Text(buildAnnotatedString {
                 val link = LinkAnnotation.Url(
                     "https://github.com/AceDroidX/frp-Android",
@@ -104,8 +123,14 @@ class AboutActivity : ComponentActivity() {
                 }
                 withLink(link) { append("https://github.com/AceDroidX/frp-Android") }
             })
-            Text("非常感谢以下作者对 App 开发所做的贡献：", style = MaterialTheme.typography.titleMedium)
-            Text("ahsaboy: 添加应用图标、快捷开关、Tasker集成并优化了诸多功能", style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.about_contributors),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                stringResource(R.string.about_contributor_ahsaboy),
+                style = MaterialTheme.typography.titleMedium
+            )
             Text(buildAnnotatedString {
                 val link = LinkAnnotation.Url(
                     "https://github.com/ahsaboy",
@@ -116,7 +141,10 @@ class AboutActivity : ComponentActivity() {
                 }
                 withLink(link) { append("https://github.com/ahsaboy") }
             })
-            Text("z156854666: 新增同时启动多个frpc功能", style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.about_contributor_z156854666),
+                style = MaterialTheme.typography.titleMedium
+            )
             Text(buildAnnotatedString {
                 val link = LinkAnnotation.Url(
                     "https://github.com/z156854666",
@@ -128,7 +156,10 @@ class AboutActivity : ComponentActivity() {
                 withLink(link) { append("https://github.com/z156854666") }
             })
 
-            Text("frp 作者 (fatedier)：", style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.about_frp_author),
+                style = MaterialTheme.typography.titleMedium
+            )
             Text(buildAnnotatedString {
                 val link = LinkAnnotation.Url(
                     "https://github.com/fatedier/frp",

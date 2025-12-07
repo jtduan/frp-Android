@@ -43,7 +43,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 class SettingsActivity : ComponentActivity() {
     private val isStartup = MutableStateFlow(false)
-    private val themeMode = MutableStateFlow("跟随系统")
+    private val themeMode = MutableStateFlow("")
     private val allowTasker = MutableStateFlow(true)
     private val excludeFromRecents = MutableStateFlow(false)
     private val quickTileConfig = MutableStateFlow<FrpConfig?>(null)
@@ -59,15 +59,26 @@ class SettingsActivity : ComponentActivity() {
         preferences = getSharedPreferences("data", MODE_PRIVATE)
         isStartup.value = preferences.getBoolean(PreferencesKey.AUTO_START, false)
 
+        val followSystem = getString(R.string.theme_mode_follow_system)
+        val darkLabel = getString(R.string.theme_mode_dark)
+        val lightLabel = getString(R.string.theme_mode_light)
+
         // 读取主题设置，默认为跟随系统
-        val savedTheme = preferences.getString(PreferencesKey.THEME_MODE, "跟随系统") ?: "跟随系统"
-        themeMode.value = savedTheme
+        val rawTheme =
+            preferences.getString(PreferencesKey.THEME_MODE, followSystem) ?: followSystem
+        themeMode.value = when (rawTheme) {
+            darkLabel, "深色", "Dark" -> darkLabel
+            lightLabel, "浅色", "Light" -> lightLabel
+            followSystem, "跟随系统", "Follow system" -> followSystem
+            else -> rawTheme
+        }
 
         // 读取 Tasker 权限设置，默认为允许
         allowTasker.value = preferences.getBoolean(PreferencesKey.ALLOW_TASKER, true)
 
         // 读取"最近任务中排除"设置，默认为不排除
-        excludeFromRecents.value = preferences.getBoolean(PreferencesKey.EXCLUDE_FROM_RECENTS, false)
+        excludeFromRecents.value =
+            preferences.getBoolean(PreferencesKey.EXCLUDE_FROM_RECENTS, false)
 
         // 加载配置列表
         loadConfigList()
@@ -77,22 +88,19 @@ class SettingsActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
-            val currentTheme by themeMode.collectAsStateWithLifecycle("跟随系统")
+            val currentTheme by themeMode.collectAsStateWithLifecycle(followSystem)
             FrpTheme(themeMode = currentTheme) {
                 Scaffold(topBar = {
-                    TopAppBar(
-                        title = {
-                            Text("设置")
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = { finish() }) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_arrow_back_24dp),
-                                    contentDescription = "返回"
-                                )
-                            }
+                    TopAppBar(title = {
+                        Text(stringResource(R.string.settings_title))
+                    }, navigationIcon = {
+                        IconButton(onClick = { finish() }) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_arrow_back_24dp),
+                                contentDescription = stringResource(R.string.content_desc_back)
+                            )
                         }
-                    )
+                    })
                 }) { contentPadding ->
                     Box(
                         modifier = Modifier
@@ -110,11 +118,17 @@ class SettingsActivity : ComponentActivity() {
     @Composable
     fun SettingsContent() {
         val isAutoStart by isStartup.collectAsStateWithLifecycle(false)
-        val currentTheme by themeMode.collectAsStateWithLifecycle("跟随系统")
+        val currentTheme by themeMode.collectAsStateWithLifecycle(stringResource(R.string.theme_mode_follow_system))
         val isTaskerAllowed by allowTasker.collectAsStateWithLifecycle(true)
         val isExcludeFromRecents by excludeFromRecents.collectAsStateWithLifecycle(false)
         val currentQuickTileConfig by quickTileConfig.collectAsStateWithLifecycle(null)
         val configs by allConfigs.collectAsStateWithLifecycle(emptyList())
+
+        val themeOptions = listOf(
+            stringResource(R.string.theme_mode_dark),
+            stringResource(R.string.theme_mode_light),
+            stringResource(R.string.theme_mode_follow_system)
+        )
 
         Column(
             modifier = Modifier
@@ -124,30 +138,28 @@ class SettingsActivity : ComponentActivity() {
         ) {
             // 开机自启动设置项
             SettingItemWithSwitch(
-                title = "开机自启动",
+                title = stringResource(R.string.auto_start_switch),
                 checked = isAutoStart,
                 onCheckedChange = { checked ->
                     val editor = preferences.edit()
                     editor.putBoolean(PreferencesKey.AUTO_START, checked)
                     editor.apply()
                     isStartup.value = checked
-                }
-            )
+                })
 
             HorizontalDivider()
 
             // 主题切换设置项
             SettingItemWithDropdown(
-                title = "主题模式",
+                title = stringResource(R.string.theme_mode_title),
                 currentValue = currentTheme,
-                options = listOf("深色", "浅色", "跟随系统"),
+                options = themeOptions,
                 onValueChange = { newTheme ->
                     val editor = preferences.edit()
                     editor.putString(PreferencesKey.THEME_MODE, newTheme)
                     editor.apply()
                     themeMode.value = newTheme
-                }
-            )
+                })
 
             HorizontalDivider()
 
@@ -167,28 +179,26 @@ class SettingsActivity : ComponentActivity() {
                     }
                     editor.apply()
                     quickTileConfig.value = config
-                }
-            )
+                })
 
             HorizontalDivider()
 
             // 允许 Tasker 调用设置项
             SettingItemWithSwitch(
-                title = "允许 Tasker 调用",
+                title = stringResource(R.string.allow_tasker_title),
                 checked = isTaskerAllowed,
                 onCheckedChange = { checked ->
                     val editor = preferences.edit()
                     editor.putBoolean(PreferencesKey.ALLOW_TASKER, checked)
                     editor.apply()
                     allowTasker.value = checked
-                }
-            )
+                })
 
             HorizontalDivider()
 
             // 最近任务中排除设置项
             SettingItemWithSwitch(
-                title = "最近任务中排除",
+                title = stringResource(R.string.exclude_from_recents_title),
                 checked = isExcludeFromRecents,
                 onCheckedChange = { checked ->
                     val editor = preferences.edit()
@@ -199,41 +209,43 @@ class SettingsActivity : ComponentActivity() {
                     // 立即应用设置，不需要重启
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
                         try {
-                            val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
+                            val am =
+                                getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
                             val appTasks = am.appTasks
-                            android.util.Log.d("SettingsActivity", "appTasks size: ${appTasks.size}")
+                            android.util.Log.d(
+                                "SettingsActivity", "appTasks size: ${appTasks.size}"
+                            )
                             if (appTasks.isNotEmpty()) {
                                 for (task in appTasks) {
                                     task.setExcludeFromRecents(checked)
-                                    android.util.Log.d("SettingsActivity", "Set excludeFromRecents to $checked")
+                                    android.util.Log.d(
+                                        "SettingsActivity", "Set excludeFromRecents to $checked"
+                                    )
                                 }
                             } else {
                                 android.util.Log.w("SettingsActivity", "appTasks is empty")
                             }
                         } catch (e: Exception) {
-                            android.util.Log.e("SettingsActivity", "Failed to set excludeFromRecents: ${e.message}")
+                            android.util.Log.e(
+                                "SettingsActivity", "Failed to set excludeFromRecents: ${e.message}"
+                            )
                         }
                     }
-                }
-            )
+                })
 
             HorizontalDivider()
 
             // 关于设置项
             SettingItemClickable(
-                title = "关于",
-                onClick = {
+                title = stringResource(R.string.aboutButton), onClick = {
                     startActivity(Intent(this@SettingsActivity, AboutActivity::class.java))
-                }
-            )
+                })
         }
     }
 
     @Composable
     fun SettingItemWithSwitch(
-        title: String,
-        checked: Boolean,
-        onCheckedChange: (Boolean) -> Unit
+        title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit
     ) {
         Row(
             modifier = Modifier
@@ -243,36 +255,28 @@ class SettingsActivity : ComponentActivity() {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge
+                text = title, style = MaterialTheme.typography.bodyLarge
             )
             Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange
+                checked = checked, onCheckedChange = onCheckedChange
             )
         }
     }
 
     @Composable
     fun SettingItemWithDropdown(
-        title: String,
-        currentValue: String,
-        options: List<String>,
-        onValueChange: (String) -> Unit
+        title: String, currentValue: String, options: List<String>, onValueChange: (String) -> Unit
     ) {
         var expanded by remember { mutableStateOf(false) }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = true }
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+        Row(modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = true }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+            verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge
+                text = title, style = MaterialTheme.typography.bodyLarge
             )
             Box {
                 Text(
@@ -281,17 +285,12 @@ class SettingsActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.primary
                 )
                 DropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false }
-                ) {
+                    expanded = expanded, onDismissRequest = { expanded = false }) {
                     options.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option) },
-                            onClick = {
-                                onValueChange(option)
-                                expanded = false
-                            }
-                        )
+                        DropdownMenuItem(text = { Text(option) }, onClick = {
+                            onValueChange(option)
+                            expanded = false
+                        })
                     }
                 }
             }
@@ -300,20 +299,16 @@ class SettingsActivity : ComponentActivity() {
 
     @Composable
     fun SettingItemClickable(
-        title: String,
-        onClick: () -> Unit
+        title: String, onClick: () -> Unit
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onClick() }
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+        Row(modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+            verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge
+                text = title, style = MaterialTheme.typography.bodyLarge
             )
             Icon(
                 painter = painterResource(id = R.drawable.ic_arrow_back_24dp),
@@ -333,20 +328,19 @@ class SettingsActivity : ComponentActivity() {
         var expanded by remember { mutableStateOf(false) }
 
         val displayValue = currentConfig?.let {
-            "${it.type.typeName}: ${it.fileName.removeSuffix(".toml")}"
+            stringResource(
+                R.string.config_display_value, it.type.typeName, it.fileName.removeSuffix(".toml")
+            )
         } ?: stringResource(R.string.quick_tile_not_selected)
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = true }
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+        Row(modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = true }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+            verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge
+                text = title, style = MaterialTheme.typography.bodyLarge
             )
             Box {
                 Text(
@@ -355,28 +349,28 @@ class SettingsActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.primary
                 )
                 DropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false }
-                ) {
+                    expanded = expanded, onDismissRequest = { expanded = false }) {
                     // 不选择选项
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.quick_tile_not_selected)) },
                         onClick = {
                             onConfigChange(null)
                             expanded = false
-                        }
-                    )
+                        })
                     // 配置列表
                     configs.forEach { config ->
-                        DropdownMenuItem(
-                            text = {
-                                Text("${config.type.typeName}: ${config.fileName.removeSuffix(".toml")}")
-                            },
-                            onClick = {
-                                onConfigChange(config)
-                                expanded = false
-                            }
-                        )
+                        DropdownMenuItem(text = {
+                            Text(
+                                stringResource(
+                                    R.string.config_display_value,
+                                    config.type.typeName,
+                                    config.fileName.removeSuffix(".toml")
+                                )
+                            )
+                        }, onClick = {
+                            onConfigChange(config)
+                            expanded = false
+                        })
                     }
                 }
             }
