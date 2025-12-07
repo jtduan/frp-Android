@@ -50,6 +50,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
@@ -234,10 +236,14 @@ class MainActivity : ComponentActivity() {
                     })
                 }, floatingActionButton = {
                     FloatingActionButton(
-                        onClick = { openDialog.value = true }) {
+                        onClick = { openDialog.value = true },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ) {
                         Icon(
-                            painter = painterResource(id = android.R.drawable.ic_input_add),
-                            contentDescription = stringResource(R.string.addConfigButton)
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = stringResource(R.string.addConfigButton),
+                            tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
                 }, snackbarHost = {
