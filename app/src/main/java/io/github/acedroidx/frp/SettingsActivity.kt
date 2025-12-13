@@ -41,6 +41,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.acedroidx.frp.ui.theme.FrpTheme
 import io.github.acedroidx.frp.ui.theme.ThemeModeKeys
 import kotlinx.coroutines.flow.MutableStateFlow
+import androidx.compose.runtime.collectAsState
+import androidx.core.content.edit
 
 class SettingsActivity : ComponentActivity() {
     private val isStartup = MutableStateFlow(false)
@@ -61,8 +63,7 @@ class SettingsActivity : ComponentActivity() {
         isStartup.value = preferences.getBoolean(PreferencesKey.AUTO_START, false)
 
         // 读取主题设置，默认为跟随系统
-        val rawTheme =
-            preferences.getString(PreferencesKey.THEME_MODE, ThemeModeKeys.FOLLOW_SYSTEM)
+        val rawTheme = preferences.getString(PreferencesKey.THEME_MODE, ThemeModeKeys.FOLLOW_SYSTEM)
         themeMode.value = ThemeModeKeys.normalize(rawTheme)
 
         // 读取 Tasker 权限设置，默认为允许
@@ -80,7 +81,7 @@ class SettingsActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
-            val currentTheme by themeMode.collectAsStateWithLifecycle(themeMode.value.ifEmpty { ThemeModeKeys.FOLLOW_SYSTEM })
+            val currentTheme by themeMode.collectAsStateWithLifecycle(themeMode.collectAsState().value.ifEmpty { ThemeModeKeys.FOLLOW_SYSTEM })
             FrpTheme(themeMode = currentTheme) {
                 Scaffold(topBar = {
                     TopAppBar(title = {
@@ -110,7 +111,7 @@ class SettingsActivity : ComponentActivity() {
     @Composable
     fun SettingsContent() {
         val isAutoStart by isStartup.collectAsStateWithLifecycle(false)
-        val currentTheme by themeMode.collectAsStateWithLifecycle(themeMode.value.ifEmpty { ThemeModeKeys.FOLLOW_SYSTEM })
+        val currentTheme by themeMode.collectAsStateWithLifecycle(themeMode.collectAsState().value.ifEmpty { ThemeModeKeys.FOLLOW_SYSTEM })
         val isTaskerAllowed by allowTasker.collectAsStateWithLifecycle(true)
         val isExcludeFromRecents by excludeFromRecents.collectAsStateWithLifecycle(false)
         val currentQuickTileConfig by quickTileConfig.collectAsStateWithLifecycle(null)
@@ -133,9 +134,9 @@ class SettingsActivity : ComponentActivity() {
                 title = stringResource(R.string.auto_start_switch),
                 checked = isAutoStart,
                 onCheckedChange = { checked ->
-                    val editor = preferences.edit()
-                    editor.putBoolean(PreferencesKey.AUTO_START, checked)
-                    editor.apply()
+                    preferences.edit {
+                        putBoolean(PreferencesKey.AUTO_START, checked)
+                    }
                     isStartup.value = checked
                 })
 
@@ -147,9 +148,9 @@ class SettingsActivity : ComponentActivity() {
                 currentKey = currentTheme,
                 options = themeOptions,
                 onValueChange = { newThemeKey ->
-                    val editor = preferences.edit()
-                    editor.putString(PreferencesKey.THEME_MODE, newThemeKey)
-                    editor.apply()
+                    preferences.edit {
+                        putString(PreferencesKey.THEME_MODE, newThemeKey)
+                    }
                     themeMode.value = ThemeModeKeys.normalize(newThemeKey)
                 })
 
@@ -161,15 +162,15 @@ class SettingsActivity : ComponentActivity() {
                 currentConfig = currentQuickTileConfig,
                 configs = configs,
                 onConfigChange = { config ->
-                    val editor = preferences.edit()
-                    if (config != null) {
-                        editor.putString(PreferencesKey.QUICK_TILE_CONFIG_TYPE, config.type.name)
-                        editor.putString(PreferencesKey.QUICK_TILE_CONFIG_NAME, config.fileName)
-                    } else {
-                        editor.remove(PreferencesKey.QUICK_TILE_CONFIG_TYPE)
-                        editor.remove(PreferencesKey.QUICK_TILE_CONFIG_NAME)
+                    preferences.edit {
+                        if (config != null) {
+                            putString(PreferencesKey.QUICK_TILE_CONFIG_TYPE, config.type.name)
+                            putString(PreferencesKey.QUICK_TILE_CONFIG_NAME, config.fileName)
+                        } else {
+                            remove(PreferencesKey.QUICK_TILE_CONFIG_TYPE)
+                            remove(PreferencesKey.QUICK_TILE_CONFIG_NAME)
+                        }
                     }
-                    editor.apply()
                     quickTileConfig.value = config
                 })
 
@@ -180,9 +181,9 @@ class SettingsActivity : ComponentActivity() {
                 title = stringResource(R.string.allow_tasker_title),
                 checked = isTaskerAllowed,
                 onCheckedChange = { checked ->
-                    val editor = preferences.edit()
-                    editor.putBoolean(PreferencesKey.ALLOW_TASKER, checked)
-                    editor.apply()
+                    preferences.edit {
+                        putBoolean(PreferencesKey.ALLOW_TASKER, checked)
+                    }
                     allowTasker.value = checked
                 })
 
@@ -193,35 +194,32 @@ class SettingsActivity : ComponentActivity() {
                 title = stringResource(R.string.exclude_from_recents_title),
                 checked = isExcludeFromRecents,
                 onCheckedChange = { checked ->
-                    val editor = preferences.edit()
-                    editor.putBoolean(PreferencesKey.EXCLUDE_FROM_RECENTS, checked)
-                    editor.apply()
+                    preferences.edit {
+                        putBoolean(PreferencesKey.EXCLUDE_FROM_RECENTS, checked)
+                    }
                     excludeFromRecents.value = checked
 
                     // 立即应用设置，不需要重启
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-                        try {
-                            val am =
-                                getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
-                            val appTasks = am.appTasks
-                            android.util.Log.d(
-                                "SettingsActivity", "appTasks size: ${appTasks.size}"
-                            )
-                            if (appTasks.isNotEmpty()) {
-                                for (task in appTasks) {
-                                    task.setExcludeFromRecents(checked)
-                                    android.util.Log.d(
-                                        "SettingsActivity", "Set excludeFromRecents to $checked"
-                                    )
-                                }
-                            } else {
-                                android.util.Log.w("SettingsActivity", "appTasks is empty")
+                    try {
+                        val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
+                        val appTasks = am.appTasks
+                        android.util.Log.d(
+                            "SettingsActivity", "appTasks size: ${appTasks.size}"
+                        )
+                        if (appTasks.isNotEmpty()) {
+                            for (task in appTasks) {
+                                task.setExcludeFromRecents(checked)
+                                android.util.Log.d(
+                                    "SettingsActivity", "Set excludeFromRecents to $checked"
+                                )
                             }
-                        } catch (e: Exception) {
-                            android.util.Log.e(
-                                "SettingsActivity", "Failed to set excludeFromRecents: ${e.message}"
-                            )
+                        } else {
+                            android.util.Log.w("SettingsActivity", "appTasks is empty")
                         }
+                    } catch (e: Exception) {
+                        android.util.Log.e(
+                            "SettingsActivity", "Failed to set excludeFromRecents: ${e.message}"
+                        )
                     }
                 })
 
@@ -264,8 +262,9 @@ class SettingsActivity : ComponentActivity() {
     ) {
         var expanded by remember { mutableStateOf(false) }
 
-        val currentLabel = options.firstOrNull { it.first == currentKey }?.second
-            ?: stringResource(R.string.theme_mode_follow_system)
+        val currentLabel = options.firstOrNull { it.first == currentKey }?.second ?: stringResource(
+            R.string.theme_mode_follow_system
+        )
 
         Row(modifier = Modifier
             .fillMaxWidth()

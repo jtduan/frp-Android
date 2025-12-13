@@ -38,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.acedroidx.frp.ui.theme.FrpTheme
 import io.github.acedroidx.frp.ui.theme.ThemeModeKeys
 import kotlinx.coroutines.flow.MutableStateFlow
+import androidx.compose.runtime.collectAsState
 
 class AboutActivity : ComponentActivity() {
     private val frpVersion = MutableStateFlow("")
@@ -52,15 +53,14 @@ class AboutActivity : ComponentActivity() {
         val loadingText = getString(R.string.loading)
         frpVersion.value =
             preferences.getString(PreferencesKey.FRP_VERSION, loadingText) ?: loadingText
-        val rawTheme =
-            preferences.getString(PreferencesKey.THEME_MODE, ThemeModeKeys.FOLLOW_SYSTEM)
+        val rawTheme = preferences.getString(PreferencesKey.THEME_MODE, ThemeModeKeys.FOLLOW_SYSTEM)
         themeMode.value = ThemeModeKeys.normalize(rawTheme)
 
         enableEdgeToEdge()
         setContent {
-            val currentTheme by themeMode.collectAsStateWithLifecycle(themeMode.value.ifEmpty { ThemeModeKeys.FOLLOW_SYSTEM })
+            val currentTheme by themeMode.collectAsStateWithLifecycle(themeMode.collectAsState().value.ifEmpty { ThemeModeKeys.FOLLOW_SYSTEM })
             FrpTheme(themeMode = currentTheme) {
-                val frpVersion by frpVersion.collectAsStateWithLifecycle(frpVersion.value.ifEmpty { loadingText })
+                val frpVersion by frpVersion.collectAsStateWithLifecycle(frpVersion.collectAsState().value.ifEmpty { loadingText })
                 Scaffold(topBar = {
                     TopAppBar(title = {
                         Text(

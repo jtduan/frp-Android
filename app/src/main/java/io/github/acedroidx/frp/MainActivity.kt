@@ -83,6 +83,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.runtime.collectAsState
 
 
 class MainActivity : ComponentActivity() {
@@ -174,18 +175,16 @@ class MainActivity : ComponentActivity() {
 
         // 应用"最近任务中排除"设置
         val excludeFromRecents = preferences.getBoolean(PreferencesKey.EXCLUDE_FROM_RECENTS, false)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
-                val appTasks = am.appTasks
-                if (appTasks.isNotEmpty()) {
-                    for (task in appTasks) {
-                        task.setExcludeFromRecents(excludeFromRecents)
-                    }
+        try {
+            val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
+            val appTasks = am.appTasks
+            if (appTasks.isNotEmpty()) {
+                for (task in appTasks) {
+                    task.setExcludeFromRecents(excludeFromRecents)
                 }
-            } catch (e: Exception) {
-                Log.e("MainActivity", "Failed to set excludeFromRecents: ${e.message}")
             }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Failed to set excludeFromRecents: ${e.message}")
         }
 
         val loadingText = getString(R.string.loading)
@@ -202,13 +201,13 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
-            val currentTheme by themeMode.collectAsStateWithLifecycle(themeMode.value)
+            val currentTheme by themeMode.collectAsStateWithLifecycle(themeMode.collectAsState().value)
             val openDialog = remember { mutableStateOf(false) }
             val snackbarHostState = remember { SnackbarHostState() }
             val permissionGranted by permissionGranted.collectAsStateWithLifecycle(true)
 
             FrpTheme(themeMode = currentTheme) {
-                val frpVersion by frpVersion.collectAsStateWithLifecycle(frpVersion.value.ifEmpty { loadingText })
+                val frpVersion by frpVersion.collectAsStateWithLifecycle(frpVersion.collectAsState().value.ifEmpty { loadingText })
                 Scaffold(topBar = {
                     TopAppBar(title = {
                         Text(
@@ -561,23 +560,22 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         // 从 SharedPreferences 重新加载主题设置
-        val savedTheme = preferences.getString(PreferencesKey.THEME_MODE, ThemeModeKeys.FOLLOW_SYSTEM)
+        val savedTheme =
+            preferences.getString(PreferencesKey.THEME_MODE, ThemeModeKeys.FOLLOW_SYSTEM)
         themeMode.value = ThemeModeKeys.normalize(savedTheme)
 
         // 重新应用"最近任务中排除"设置
         val excludeFromRecents = preferences.getBoolean(PreferencesKey.EXCLUDE_FROM_RECENTS, false)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
-                val appTasks = am.appTasks
-                if (appTasks.isNotEmpty()) {
-                    for (task in appTasks) {
-                        task.setExcludeFromRecents(excludeFromRecents)
-                    }
+        try {
+            val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
+            val appTasks = am.appTasks
+            if (appTasks.isNotEmpty()) {
+                for (task in appTasks) {
+                    task.setExcludeFromRecents(excludeFromRecents)
                 }
-            } catch (e: Exception) {
-                Log.e("MainActivity", "Failed to set excludeFromRecents in onResume: ${e.message}")
             }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Failed to set excludeFromRecents in onResume: ${e.message}")
         }
 
         // 重新检查权限状态（用户可能从设置页面返回）

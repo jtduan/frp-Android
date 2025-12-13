@@ -48,6 +48,8 @@ import io.github.acedroidx.frp.ui.theme.FrpTheme
 import io.github.acedroidx.frp.ui.theme.ThemeModeKeys
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.io.File
+import androidx.compose.runtime.collectAsState
+import androidx.core.content.edit
 
 class ConfigActivity : ComponentActivity() {
     private val configEditText = MutableStateFlow("")
@@ -81,17 +83,16 @@ class ConfigActivity : ComponentActivity() {
         val loadingText = getString(R.string.loading)
         frpVersion.value =
             preferences.getString(PreferencesKey.FRP_VERSION, loadingText) ?: loadingText
-        val rawTheme =
-            preferences.getString(PreferencesKey.THEME_MODE, ThemeModeKeys.FOLLOW_SYSTEM)
+        val rawTheme = preferences.getString(PreferencesKey.THEME_MODE, ThemeModeKeys.FOLLOW_SYSTEM)
         themeMode.value = ThemeModeKeys.normalize(rawTheme)
         readConfig()
         readIsAutoStart()
 
         enableEdgeToEdge()
         setContent {
-            val currentTheme by themeMode.collectAsStateWithLifecycle(themeMode.value.ifEmpty { ThemeModeKeys.FOLLOW_SYSTEM })
+            val currentTheme by themeMode.collectAsStateWithLifecycle(themeMode.collectAsState().value.ifEmpty { ThemeModeKeys.FOLLOW_SYSTEM })
             FrpTheme(themeMode = currentTheme) {
-                val frpVersion by frpVersion.collectAsStateWithLifecycle(frpVersion.value.ifEmpty { loadingText })
+                val frpVersion by frpVersion.collectAsStateWithLifecycle(frpVersion.collectAsState().value.ifEmpty { loadingText })
                 Scaffold(topBar = {
                     TopAppBar(title = {
                         Text(
@@ -249,15 +250,15 @@ class ConfigActivity : ComponentActivity() {
     }
 
     fun setAutoStart(value: Boolean) {
-        val editor = preferences.edit()
-        val set = preferences.getStringSet(autoStartPreferencesKey, emptySet())?.toMutableSet()
-        if (value) {
-            set?.add(configFile.name)
-        } else {
-            set?.remove(configFile.name)
+        preferences.edit {
+            val set = preferences.getStringSet(autoStartPreferencesKey, emptySet())?.toMutableSet()
+            if (value) {
+                set?.add(configFile.name)
+            } else {
+                set?.remove(configFile.name)
+            }
+            putStringSet(autoStartPreferencesKey, set)
         }
-        editor.putStringSet(autoStartPreferencesKey, set)
-        editor.apply()
         isAutoStart.value = value
     }
 
