@@ -199,6 +199,10 @@ class MainActivity : ComponentActivity() {
         createBGNotificationChannel()
         checkAndRequestPermissions()
 
+        if (preferences.getBoolean(PreferencesKey.AUTO_START_LAUNCH, false)) {
+            maybeAutoStartOnLaunch()
+        }
+
         enableEdgeToEdge()
         setContent {
             val currentTheme by themeMode.collectAsStateWithLifecycle(themeMode.collectAsState().value)
@@ -647,11 +651,17 @@ class MainActivity : ComponentActivity() {
         configActivityLauncher.launch(intent)
     }
 
-    private fun startShell(config: FrpConfig) {
+    private fun startShell(configs: List<FrpConfig>) {
+        if (configs.isEmpty()) return
+
         val intent = Intent(this, ShellService::class.java)
         intent.action = ShellServiceAction.START
-        intent.putExtra(IntentExtraKey.FrpConfig, arrayListOf(config))
+        intent.putExtra(IntentExtraKey.FrpConfig, ArrayList(configs))
         startService(intent)
+    }
+
+    private fun startShell(config: FrpConfig) {
+        startShell(listOf(config))
     }
 
     private fun stopShell(config: FrpConfig) {
@@ -702,6 +712,11 @@ class MainActivity : ComponentActivity() {
                 getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
         }
+    }
+
+    private fun maybeAutoStartOnLaunch() {
+        val configList = AutoStartHelper.loadAutoStartConfigs(this)
+        startShell(configList)
     }
 
     private fun updateConfigList() {

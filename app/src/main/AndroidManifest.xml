@@ -85,6 +85,11 @@
 
                 <category android:name="android.intent.category.HOME" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="io.github.acedroidx.frp.START" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </receiver>
 
         <!-- Quick Settings Tile -->
