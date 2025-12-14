@@ -58,6 +58,7 @@ class SettingsActivity : ComponentActivity() {
     private val themeMode = MutableStateFlow("")
     private val allowTasker = MutableStateFlow(true)
     private val excludeFromRecents = MutableStateFlow(false)
+    private val hideServiceStartToast = MutableStateFlow(false)
     private val quickTileConfig = MutableStateFlow<FrpConfig?>(null)
     private lateinit var preferences: SharedPreferences
 
@@ -87,6 +88,10 @@ class SettingsActivity : ComponentActivity() {
         // 读取"最近任务中排除"设置，默认为不排除
         excludeFromRecents.value =
             preferences.getBoolean(PreferencesKey.EXCLUDE_FROM_RECENTS, false)
+
+        // 读取服务启动提示隐藏设置，默认为不隐藏
+        hideServiceStartToast.value =
+            preferences.getBoolean(PreferencesKey.HIDE_SERVICE_START_TOAST, false)
 
         // 加载配置列表
         loadConfigList()
@@ -129,6 +134,7 @@ class SettingsActivity : ComponentActivity() {
         val currentTheme by themeMode.collectAsStateWithLifecycle(themeMode.collectAsState().value.ifEmpty { ThemeModeKeys.FOLLOW_SYSTEM })
         val isTaskerAllowed by allowTasker.collectAsStateWithLifecycle(true)
         val isExcludeFromRecents by excludeFromRecents.collectAsStateWithLifecycle(false)
+        val isHideServiceStartToast by hideServiceStartToast.collectAsStateWithLifecycle(false)
         val currentQuickTileConfig by quickTileConfig.collectAsStateWithLifecycle(null)
         val configs by allConfigs.collectAsStateWithLifecycle(emptyList())
 
@@ -236,6 +242,17 @@ class SettingsActivity : ComponentActivity() {
                                     "Failed to set excludeFromRecents: ${e.message}"
                                 )
                             }
+                        })
+
+                    // 隐藏服务启动提示设置项
+                    SettingItemWithSwitch(
+                        title = stringResource(R.string.hide_service_start_toast_title),
+                        checked = isHideServiceStartToast,
+                        onCheckedChange = { checked ->
+                            preferences.edit {
+                                putBoolean(PreferencesKey.HIDE_SERVICE_START_TOAST, checked)
+                            }
+                            hideServiceStartToast.value = checked
                         })
 
                 }

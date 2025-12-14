@@ -66,6 +66,7 @@
     <string name="theme_mode_follow_system">Follow system</string>
     <string name="allow_tasker_title">Allow Tasker</string>
     <string name="exclude_from_recents_title">Exclude from recents</string>
+    <string name="hide_service_start_toast_title">Hide service start toast</string>
     <string name="notification_permission_denied_message">Notification permission is not granted, background notifications will not be shown.</string>
     <string name="notification_permission_action_settings">Open settings</string>
     <string name="config_display_value">%1$s: %2$s</string>

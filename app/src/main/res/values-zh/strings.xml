@@ -65,6 +65,7 @@
     <string name="theme_mode_follow_system">跟随系统</string>
     <string name="allow_tasker_title">允许 Tasker 调用</string>
     <string name="exclude_from_recents_title">最近任务中排除</string>
+    <string name="hide_service_start_toast_title">隐藏服务启动提示</string>
     <string name="notification_permission_denied_message">通知权限未授予，后台运行通知将无法显示</string>
     <string name="notification_permission_action_settings">去设置</string>
     <string name="config_display_value">%1$s：%2$s</string>

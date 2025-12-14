@@ -11,6 +11,7 @@ object PreferencesKey {
     const val THEME_MODE = "theme_mode"
     const val ALLOW_TASKER = "allow_tasker"
     const val EXCLUDE_FROM_RECENTS = "exclude_from_recents"
+    const val HIDE_SERVICE_START_TOAST = "hide_service_start_toast"
     const val QUICK_TILE_CONFIG_TYPE = "quick_tile_config_type"
     const val QUICK_TILE_CONFIG_NAME = "quick_tile_config_name"
 }

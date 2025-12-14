@@ -226,13 +226,20 @@ class ShellService : LifecycleService() {
                 .show()
             return START_NOT_STICKY
         }
+        val hideServiceStartToast = getSharedPreferences("data", MODE_PRIVATE)
+            .getBoolean(PreferencesKey.HIDE_SERVICE_START_TOAST, false)
         when (intent?.action) {
             ShellServiceAction.START -> {
                 for (config in frpConfig) {
                     startFrp(config)
                 }
-                Toast.makeText(this, getString(R.string.service_start_toast), Toast.LENGTH_SHORT)
-                    .show()
+                if (!hideServiceStartToast) {
+                    Toast.makeText(
+                        this,
+                        getString(R.string.service_start_toast),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
                 startForeground(1, showNotification())
             }
 
@@ -268,7 +275,13 @@ class ShellService : LifecycleService() {
         }
         if (_processThreads.value.contains(config)) {
             Log.w("adx", "frp is already running")
-            Toast.makeText(this, getString(R.string.toast_frp_running), Toast.LENGTH_SHORT).show()
+            // Respect user preference to hide service start related toasts
+            val hideServiceStartToast = getSharedPreferences("data", MODE_PRIVATE)
+                .getBoolean(PreferencesKey.HIDE_SERVICE_START_TOAST, false)
+            if (!hideServiceStartToast) {
+                Toast.makeText(this, getString(R.string.toast_frp_running), Toast.LENGTH_SHORT)
+                    .show()
+            }
             return
         }
         val ainfo = packageManager.getApplicationInfo(
