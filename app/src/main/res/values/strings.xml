@@ -32,6 +32,7 @@
     <string name="service_stop_toast">frp Service Stopped</string>
     <string name="frp_notification_title">frp Background Service</string>
     <string name="frp_notification_content">%d frp Config Started</string>
+    <string name="stop">Stop</string>
     <string name="copy">Copy</string>
     <string name="copied">Copied</string>
     <string name="no_config">No Config. Click button to add one!</string>

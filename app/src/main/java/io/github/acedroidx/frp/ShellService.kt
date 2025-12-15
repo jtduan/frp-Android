@@ -362,7 +362,7 @@ class ShellService : LifecycleService() {
             )
             //.setTicker("test")
             .setContentIntent(pendingIntent).addAction(
-                R.drawable.ic_baseline_delete_24, "停止", stopAllPendingIntent
+                R.drawable.ic_baseline_delete_24, getString(R.string.stop), stopAllPendingIntent
             )
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             notification.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
