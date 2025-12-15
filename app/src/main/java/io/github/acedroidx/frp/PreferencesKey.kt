@@ -6,6 +6,7 @@ object PreferencesKey {
     const val AUTO_START_FRPS_LIST = "auto_start_frps_list"
     const val AUTO_START_LAUNCH = "auto_start_launch"
     const val AUTO_START_BROADCAST = "auto_start_broadcast"
+    const val AUTO_STOP_BROADCAST = "auto_stop_broadcast"
     const val AUTO_START_BROADCAST_EXTRA = "auto_start_broadcast_extra"
     const val FRP_VERSION = "frp_version"
     const val THEME_MODE = "theme_mode"

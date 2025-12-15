@@ -12,10 +12,12 @@
     <string name="auto_start_boot">Startup at Boot</string>
     <string name="auto_start_launch">Startup at App Launch</string>
     <string name="auto_start_broadcast">Startup at Broadcast</string>
+    <string name="auto_stop_broadcast">Stop at Broadcast</string>
     <string name="auto_start_broadcast_extra">Allow Broadcast with Extra</string>
     <string name="auto_start_help_message">The options below apply only to configurations whose "Auto-start Switch" is enabled in their own config.</string>
     <string name="auto_start_broadcast_help_message">When enabled, receiving the start broadcast (action: %1$s) will automatically start every configuration whose "Auto-start Switch" is on.\n\nExample:\nadb shell am broadcast -a %1$s io.github.acedroidx.frp</string>
-    <string name="auto_start_broadcast_extra_help_message">When enabled, the broadcast may carry %2$s (frpc or frps) and %3$s (config file name) to start only the specified config; otherwise it starts all configs with auto-start enabled.\n\nExamples:\n\n# Start frpc config named example.toml\nadb shell am broadcast -a %1$s -e %2$s frpc -e %3$s example.toml io.github.acedroidx.frp\n\n# Start frps config named server.toml\nadb shell am broadcast -a %1$s -e %2$s frps -e %3$s server.toml io.github.acedroidx.frp</string>
+    <string name="auto_stop_broadcast_help_message">When enabled, receiving the stop broadcast (action: %1$s) will automatically stop every configuration whose "Auto-start Switch" is on.\n\nExample:\nadb shell am broadcast -a %1$s io.github.acedroidx.frp</string>
+    <string name="auto_start_broadcast_extra_help_message">When enabled, the broadcast may carry %2$s (frpc or frps) and %3$s (config file name) to start or stop only the specified config; otherwise it affects all configs with auto-start enabled.\n\nExamples:\n\n# Start frpc config named example.toml\nadb shell am broadcast -a %1$s -e %2$s frpc -e %3$s example.toml io.github.acedroidx.frp\n\n# Start frps config named server.toml\nadb shell am broadcast -a %1$s -e %2$s frps -e %3$s server.toml io.github.acedroidx.frp\n\n# Stop frpc config named example.toml\nadb shell am broadcast -a %4$s -e %2$s frpc -e %3$s example.toml io.github.acedroidx.frp\n\n# Stop frps config named server.toml\nadb shell am broadcast -a %4$s -e %2$s frps -e %3$s server.toml io.github.acedroidx.frp</string>
     <string name="addConfigButton">Add Config</string>
     <string name="aboutButton">About</string>
     <string name="frp_log">frp Log</string>

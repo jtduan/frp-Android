@@ -54,6 +54,7 @@ class SettingsActivity : ComponentActivity() {
     private val isStartup = MutableStateFlow(false)
     private val isStartupLaunch = MutableStateFlow(false)
     private val isStartupBroadcast = MutableStateFlow(false)
+    private val isStopBroadcast = MutableStateFlow(false)
     private val isStartupBroadcastExtra = MutableStateFlow(false)
     private val themeMode = MutableStateFlow("")
     private val allowTasker = MutableStateFlow(true)
@@ -75,6 +76,7 @@ class SettingsActivity : ComponentActivity() {
         isStartupLaunch.value = preferences.getBoolean(PreferencesKey.AUTO_START_LAUNCH, false)
         isStartupBroadcast.value =
             preferences.getBoolean(PreferencesKey.AUTO_START_BROADCAST, false)
+        isStopBroadcast.value = preferences.getBoolean(PreferencesKey.AUTO_STOP_BROADCAST, false)
         isStartupBroadcastExtra.value =
             preferences.getBoolean(PreferencesKey.AUTO_START_BROADCAST_EXTRA, false)
 
@@ -323,6 +325,23 @@ class SettingsActivity : ComponentActivity() {
                             isStartupBroadcast.value = checked
                         })
 
+                    // 在收到广播时关闭
+                    val isAutoStopBroadcast by isStopBroadcast.collectAsStateWithLifecycle(false)
+                    SettingItemWithSwitchAndHelp(
+                        title = stringResource(R.string.auto_stop_broadcast),
+                        helpText = stringResource(
+                            R.string.auto_stop_broadcast_help_message, BroadcastAction.STOP
+                        ),
+                        checked = isAutoStopBroadcast,
+                        onCheckedChange = { checked ->
+                            preferences.edit {
+                                putBoolean(
+                                    PreferencesKey.AUTO_STOP_BROADCAST, checked
+                                )
+                            }
+                            isStopBroadcast.value = checked
+                        })
+
                     // 允许带参数的广播
                     val isAutoStartBroadcastExtra by isStartupBroadcastExtra.collectAsStateWithLifecycle(
                         false
@@ -333,7 +352,8 @@ class SettingsActivity : ComponentActivity() {
                             R.string.auto_start_broadcast_extra_help_message,
                             BroadcastAction.START,
                             BroadcastExtraKey.TYPE,
-                            BroadcastExtraKey.NAME
+                            BroadcastExtraKey.NAME,
+                            BroadcastAction.STOP
                         ),
                         checked = isAutoStartBroadcastExtra,
                         onCheckedChange = { checked ->
