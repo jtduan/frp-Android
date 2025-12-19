@@ -227,7 +227,17 @@ foreach ($kv in $ARCH_MAP.GetEnumerator()) {
     $abi = $kv.Key
     $mapping = $kv.Value
     $patterns = @()
-    if ($mapping -eq 'linux_arm') { $patterns = @('linux_arm_hf','linux_arm') } else { $patterns = @($mapping) }
+    if ($mapping -eq 'linux_arm') {
+        # 先尝试 linux_arm_hf，再回退到 linux_arm
+        $patterns = @('linux_arm_hf','linux_arm')
+    }
+    elseif ($mapping -eq 'android_arm64') {
+        # 旧版本缺少 android_arm64 资产时，回退使用 linux_arm64
+        $patterns = @('android_arm64','linux_arm64')
+    }
+    else {
+        $patterns = @($mapping)
+    }
 
     $succeeded = $false
     foreach ($p in $patterns) {

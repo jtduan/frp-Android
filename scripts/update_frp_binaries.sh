@@ -242,8 +242,11 @@ for abi in "${!ARCH_MAP[@]}"; do
   mapping=${ARCH_MAP[$abi]}
   # For linux arm, accept both linux_arm and linux_arm_hf (hf = hardware float) in matching
   if [[ "$mapping" == "linux_arm" ]]; then
-    # try linux_arm_hf first, then linux_arm
+    # 优先尝试 linux_arm_hf，其次退回 linux_arm
     pattern_candidates=("linux_arm_hf" "linux_arm")
+  elif [[ "$mapping" == "android_arm64" ]]; then
+    # 旧版本缺少 android_arm64 资产时，回退到 linux_arm64
+    pattern_candidates=("android_arm64" "linux_arm64")
   else
     pattern_candidates=("${mapping}")
   fi
