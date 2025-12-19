@@ -108,4 +108,11 @@
     <string name="onboarding_status_done">已完成</string>
     <string name="onboarding_continue">完成</string>
     <string name="settings_reopen_onboarding">重新打开首次使用引导</string>
+    <string name="backup_title">配置与设置备份</string>
+    <string name="backup_import_button">导入备份</string>
+    <string name="backup_export_button">导出备份</string>
+    <string name="backup_export_success">备份导出成功</string>
+    <string name="backup_export_failed">备份导出失败：%1$s</string>
+    <string name="backup_import_success">备份导入成功</string>
+    <string name="backup_import_failed">备份导入失败：%1$s</string>
 </resources>

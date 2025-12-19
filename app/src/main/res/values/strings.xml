@@ -109,4 +109,11 @@
     <string name="onboarding_status_done">Done</string>
     <string name="onboarding_continue">Continue</string>
     <string name="settings_reopen_onboarding">Reopen welcome onboarding</string>
+    <string name="backup_title">Backup &amp; Restore</string>
+    <string name="backup_import_button">Import Backup</string>
+    <string name="backup_export_button">Export Backup</string>
+    <string name="backup_export_success">Backup exported</string>
+    <string name="backup_export_failed">Backup export failed: %1$s</string>
+    <string name="backup_import_success">Backup imported</string>
+    <string name="backup_import_failed">Backup import failed: %1$s</string>
 </resources>
