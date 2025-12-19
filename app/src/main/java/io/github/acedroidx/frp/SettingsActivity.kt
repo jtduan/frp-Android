@@ -176,11 +176,11 @@ class SettingsActivity : ComponentActivity() {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // 主题/快捷/Tasker/最近任务分组（Card）
             Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(8.dp)) {
+                Column(modifier = Modifier.padding(2.dp)) {
                     // 主题切换设置项
                     SettingItemWithDropdown(
                         title = stringResource(R.string.theme_mode_title),
@@ -279,7 +279,7 @@ class SettingsActivity : ComponentActivity() {
 
             // frp 自启动设置分类（Card）
             Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(8.dp)) {
+                Column(modifier = Modifier.padding(2.dp)) {
                     Row(
                         modifier = Modifier.padding(horizontal = 16.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -386,7 +386,7 @@ class SettingsActivity : ComponentActivity() {
 
             // frp 配置读写接口
             Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(8.dp)) {
+                Column(modifier = Modifier.padding(2.dp)) {
                     Row(
                         modifier = Modifier.padding(horizontal = 16.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -431,7 +431,7 @@ class SettingsActivity : ComponentActivity() {
             // 关于设置项
             // 关于设置项（Card）
             Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(8.dp)) {
+                Column(modifier = Modifier.padding(2.dp)) {
                     SettingItemClickable(
                         title = stringResource(R.string.settings_reopen_onboarding), onClick = {
                             startActivity(

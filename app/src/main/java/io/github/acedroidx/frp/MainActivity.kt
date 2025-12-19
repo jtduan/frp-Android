@@ -23,7 +23,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -73,6 +72,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.layout.Arrangement
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import io.github.acedroidx.frp.ui.theme.FrpTheme
@@ -277,7 +277,8 @@ class MainActivity : ComponentActivity() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             if (frpcConfigList.isEmpty() && frpsConfigList.isEmpty()) {
                 Text(
@@ -301,8 +302,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @Preview(showBackground = true)
     @Composable
-    fun FrpConfigItem(config: FrpConfig) {
+    fun FrpConfigItem(config: FrpConfig = FrpConfig(FrpType.FRPC, "test.toml")) {
         val runningConfigList by runningConfigList.collectAsStateWithLifecycle(emptyList())
         val isRunning = runningConfigList.contains(config)
         val showLog = remember { mutableStateOf(false) }
@@ -330,14 +332,7 @@ class MainActivity : ComponentActivity() {
             modifier = Modifier.fillMaxWidth()
         ) {
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                ),
-                onClick = {
+                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), onClick = {
                     if (mBound) {
                         showLog.value = !showLog.value
                         if (showLog.value) {
@@ -349,7 +344,7 @@ class MainActivity : ComponentActivity() {
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp)
+                        .padding(16.dp)
                 ) {
                     Column(
                         modifier = Modifier.weight(1f)
@@ -448,7 +443,9 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Column(
