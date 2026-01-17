@@ -68,10 +68,6 @@ fi
 
 log "Fetching release info from GitHub: ${API_URL}"
 
-# curl 参数：兼容部分网络环境下 HTTP/2 报错（例如 Error in the HTTP2 framing layer）
-# 并增加重试，避免偶发网络抖动导致失败
-CURL_ARGS=( -sSL --fail --location --http1.1 --retry 3 --retry-all-errors --connect-timeout 15 )
-
 AUTH_ARGS=()
 if [[ -n "$GITHUB_TOKEN" ]]; then
   AUTH_ARGS=( -H "Authorization: token ${GITHUB_TOKEN}" )
@@ -85,11 +81,11 @@ fi
 # Fetch release JSON (fail hard if GitHub returns an error)
 # 注意：macOS 自带 bash(3.2) 在 set -u 下展开空数组 "${AUTH_ARGS[@]}" 会触发 unbound variable
 if [[ ${#AUTH_ARGS[@]} -gt 0 ]]; then
-  if ! release_json=$(curl "${CURL_ARGS[@]}" "${API_URL}" -H "Accept: application/vnd.github.v3+json" "${AUTH_ARGS[@]}" ); then
+  if ! release_json=$(curl -sSL --fail "${API_URL}" -H "Accept: application/vnd.github.v3+json" "${AUTH_ARGS[@]}" ); then
     err "Failed to fetch release info from GitHub (${API_URL})"; exit 3
   fi
 else
-  if ! release_json=$(curl "${CURL_ARGS[@]}" "${API_URL}" -H "Accept: application/vnd.github.v3+json" ); then
+  if ! release_json=$(curl -sSL --fail "${API_URL}" -H "Accept: application/vnd.github.v3+json" ); then
     err "Failed to fetch release info from GitHub (${API_URL})"; exit 3
   fi
 fi
@@ -158,7 +154,7 @@ process_asset() {
     log "DRY RUN: would download ${asset_url} to ${filename}"
   else
     log "Downloading ${asset_url}..."
-    if ! curl "${CURL_ARGS[@]}" -o "${filename}" "${asset_url}"; then
+    if ! curl -sSL --fail -o "${filename}" "${asset_url}"; then
       err "Download failed for ${asset_url}";
       # 2 = download failed (fatal)
       return 2
