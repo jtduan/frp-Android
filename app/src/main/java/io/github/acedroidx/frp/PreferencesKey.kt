@@ -8,7 +8,6 @@ object PreferencesKey {
     const val AUTO_START_BROADCAST = "auto_start_broadcast"
     const val AUTO_STOP_BROADCAST = "auto_stop_broadcast"
     const val AUTO_START_BROADCAST_EXTRA = "auto_start_broadcast_extra"
-    const val LOCAL_SOCKS5_ENABLED = "local_socks5_enabled"
     const val FRP_VERSION = "frp_version"
     const val THEME_MODE = "theme_mode"
     const val ALLOW_TASKER = "allow_tasker"

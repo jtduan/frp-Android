@@ -78,7 +78,6 @@ class SettingsActivity : ComponentActivity() {
     private val isStartupBroadcastExtra = MutableStateFlow(false)
     private val themeMode = MutableStateFlow("")
     private val allowTasker = MutableStateFlow(false)
-    private val localSocks5Enabled = MutableStateFlow(false)
     private val excludeFromRecents = MutableStateFlow(false)
     private val hideServiceToast = MutableStateFlow(false)
     private val allowConfigRead = MutableStateFlow(false)
@@ -185,7 +184,6 @@ class SettingsActivity : ComponentActivity() {
         val isAutoStart by isStartup.collectAsStateWithLifecycle(false)
         val currentTheme by themeMode.collectAsStateWithLifecycle(themeMode.collectAsState().value.ifEmpty { ThemeModeKeys.FOLLOW_SYSTEM })
         val isTaskerAllowed by allowTasker.collectAsStateWithLifecycle(false)
-        val isLocalSocks5Enabled by localSocks5Enabled.collectAsStateWithLifecycle(false)
         val isExcludeFromRecents by excludeFromRecents.collectAsStateWithLifecycle(false)
         val isHideServiceToast by hideServiceToast.collectAsStateWithLifecycle(false)
         val isConfigReadAllowed by allowConfigRead.collectAsStateWithLifecycle(false)
@@ -269,21 +267,6 @@ class SettingsActivity : ComponentActivity() {
                                 putBoolean(PreferencesKey.ALLOW_TASKER, checked)
                             }
                             allowTasker.value = checked
-                        })
-
-                    SettingItemWithSwitch(
-                        title = stringResource(R.string.local_socks5_title),
-                        checked = isLocalSocks5Enabled,
-                        onCheckedChange = { checked ->
-                            preferences.edit {
-                                putBoolean(PreferencesKey.LOCAL_SOCKS5_ENABLED, checked)
-                            }
-                            localSocks5Enabled.value = checked
-                            if (checked) {
-                                startLocalSocks5Service()
-                            } else {
-                                stopLocalSocks5Service()
-                            }
                         })
 
                     // 最近任务中排除设置项
@@ -734,14 +717,10 @@ class SettingsActivity : ComponentActivity() {
     private fun loadPreferencesIntoState() {
         isStartup.value = preferences.getBoolean(PreferencesKey.AUTO_START, false)
         isStartupLaunch.value = preferences.getBoolean(PreferencesKey.AUTO_START_LAUNCH, false)
-        isStartupBroadcast.value =
-            preferences.getBoolean(PreferencesKey.AUTO_START_BROADCAST, false)
+        isStartupBroadcast.value = preferences.getBoolean(PreferencesKey.AUTO_START_BROADCAST, false)
         isStopBroadcast.value = preferences.getBoolean(PreferencesKey.AUTO_STOP_BROADCAST, false)
         isStartupBroadcastExtra.value =
             preferences.getBoolean(PreferencesKey.AUTO_START_BROADCAST_EXTRA, false)
-
-        localSocks5Enabled.value =
-            preferences.getBoolean(PreferencesKey.LOCAL_SOCKS5_ENABLED, false)
 
         val rawTheme = preferences.getString(PreferencesKey.THEME_MODE, ThemeModeKeys.FOLLOW_SYSTEM)
         themeMode.value = ThemeModeKeys.normalize(rawTheme)
@@ -755,24 +734,6 @@ class SettingsActivity : ComponentActivity() {
 
         // 读取快捷开关配置
         loadQuickTileConfig()
-    }
-
-    private fun startLocalSocks5Service() {
-        val intent = Intent(this, Socks5Service::class.java).apply {
-            action = Socks5Service.ACTION_START
-        }
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            ContextCompat.startForegroundService(this, intent)
-        } else {
-            startService(intent)
-        }
-    }
-
-    private fun stopLocalSocks5Service() {
-        val intent = Intent(this, Socks5Service::class.java).apply {
-            action = Socks5Service.ACTION_STOP
-        }
-        startService(intent)
     }
 
     private fun refreshStateAfterImport() {

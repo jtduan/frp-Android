@@ -53,8 +53,8 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -78,17 +78,22 @@ import androidx.lifecycle.lifecycleScope
 import io.github.acedroidx.frp.ui.theme.FrpTheme
 import io.github.acedroidx.frp.ui.theme.ThemeModeKeys
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import androidx.compose.runtime.collectAsState
 
 class MainActivity : ComponentActivity() {
-    private val frpcSingleConfigFileName = "frpc.toml"
+    private val frpcConfigFileNameDefault = "frpc.toml"
+    private val frpcConfigFileName5g = "frpc_5g.toml"
+    private val frpcConfigFileNameWifi = "frpc_wifi.toml"
     private val isStartup = MutableStateFlow(false)
     private val frpcConfigList = MutableStateFlow<List<FrpConfig>>(emptyList())
     private val frpsConfigList = MutableStateFlow<List<FrpConfig>>(emptyList())
@@ -239,7 +244,7 @@ class MainActivity : ComponentActivity() {
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     ) {
                         Icon(
-                            painter = painterResource(id = R.drawable.baseline_add_24),
+                            painter = painterResource(id = R.drawable.baseline_refresh_24),
                             contentDescription = stringResource(R.string.fetch_config_button),
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
@@ -279,6 +284,7 @@ class MainActivity : ComponentActivity() {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            Socks5PortStatus()
             if (frpcConfigList.isEmpty() && frpsConfigList.isEmpty()) {
                 Text(
                     stringResource(R.string.no_config),
@@ -301,6 +307,58 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @Composable
+    private fun Socks5PortStatus() {
+        val wifiPortOpen = remember { mutableStateOf(false) }
+        val cellPortOpen = remember { mutableStateOf(false) }
+
+        LaunchedEffect(Unit) {
+            while (true) {
+                wifiPortOpen.value = isLocalPortOpen(10001)
+                cellPortOpen.value = isLocalPortOpen(10002)
+                delay(1000)
+            }
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "SOCKS5",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = "10001: ${if (wifiPortOpen.value) "已开启" else "未开启"}",
+                    color = if (wifiPortOpen.value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = "10002: ${if (cellPortOpen.value) "已开启" else "未开启"}",
+                    color = if (cellPortOpen.value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+    }
+
+    private suspend fun isLocalPortOpen(port: Int): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                Socket().use { s ->
+                    s.connect(InetSocketAddress("127.0.0.1", port), 300)
+                }
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
+    }
+
     @Preview(showBackground = true)
     @Composable
     fun FrpConfigItem(config: FrpConfig = FrpConfig(FrpType.FRPC, "test.toml")) {
@@ -308,6 +366,16 @@ class MainActivity : ComponentActivity() {
         val isRunning = runningConfigList.contains(config)
         val showLog = remember { mutableStateOf(false) }
         val showDeleteDialog = remember { mutableStateOf(false) }
+
+        // frpc_wifi / frpc_5g 属于“端口联动配置”：用户打开开关后可能需要等待 socks5 端口准备完毕
+        // 此时 frpc 进程尚未启动，但 UI 也应该保持开关为“开”，避免误以为没启动
+        val desiredLinkedConfigs by if (mBound) {
+            mService.desiredLinkedFrpcConfigsFlow.collectAsStateWithLifecycle(emptySet())
+        } else {
+            remember { MutableStateFlow(emptySet<FrpConfig>()) }.collectAsStateWithLifecycle(emptySet())
+        }
+        val isLinkedConfig = config.type == FrpType.FRPC && (config.fileName == "frpc_wifi.toml" || config.fileName == "frpc_5g.toml")
+        val isSwitchOn = if (isLinkedConfig) (isRunning || desiredLinkedConfigs.contains(config)) else isRunning
 
         // 监听实时配置日志
         val configLogs by if (mBound) {
@@ -390,24 +458,26 @@ class MainActivity : ComponentActivity() {
                                 })
                     ) {
                         Icon(
-                            painter = painterResource(id = R.drawable.ic_pencil_24dp),
-                            contentDescription = stringResource(R.string.content_desc_edit),
+                            painter = painterResource(id = R.drawable.ic_visibility_24dp),
+                            contentDescription = stringResource(R.string.content_desc_view),
                             modifier = Modifier.size(28.dp)
                         )
                     }
-                    IconButton(
-                        onClick = {
-                            showDeleteDialog.value = true
-                        }, enabled = !isRunning, modifier = Modifier.size(32.dp, 28.dp)
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_baseline_delete_24),
-                            contentDescription = stringResource(R.string.content_desc_delete_config),
-                            modifier = Modifier.size(28.dp)
-                        )
+                    if (config.type == FrpType.FRPS) {
+                        IconButton(
+                            onClick = {
+                                showDeleteDialog.value = true
+                            }, enabled = !isRunning, modifier = Modifier.size(32.dp, 28.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_baseline_delete_24),
+                                contentDescription = stringResource(R.string.content_desc_delete_config),
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
                     }
 
-                    Switch(checked = isRunning, onCheckedChange = {
+                    Switch(checked = isSwitchOn, onCheckedChange = {
                         if (it) {
                             startShell(config)
                         } else {
@@ -487,7 +557,7 @@ class MainActivity : ComponentActivity() {
         }
 
         // 删除确认对话框
-        if (showDeleteDialog.value) {
+        if (config.type == FrpType.FRPS && showDeleteDialog.value) {
             AlertDialog(
                 onDismissRequest = { showDeleteDialog.value = false },
                 title = { Text(stringResource(R.string.confirm_delete_title)) },
@@ -639,31 +709,45 @@ class MainActivity : ComponentActivity() {
         if (!frpcDir.exists()) {
             frpcDir.mkdirs()
         }
-        val file = File(frpcDir, frpcSingleConfigFileName)
+        val fileDefault = File(frpcDir, frpcConfigFileNameDefault)
+        val file5g = File(frpcDir, frpcConfigFileName5g)
+        val fileWifi = File(frpcDir, frpcConfigFileNameWifi)
         lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                RemoteConfigFetcher.fetchConfig(this@MainActivity)
+            val (rDefault, r4g, rWifi) = withContext(Dispatchers.IO) {
+                val r1 = RemoteConfigFetcher.fetchConfig(this@MainActivity, "拉取")
+                val r2 = RemoteConfigFetcher.fetchConfig(this@MainActivity, "5g")
+                val r3 = RemoteConfigFetcher.fetchConfig(this@MainActivity, "wifi")
+                Triple(r1, r2, r3)
             }
-            result.onSuccess { content ->
-                try {
-                    withContext(Dispatchers.IO) {
-                        file.writeText(content)
-                    }
-                    ensureSingleFrpcConfig(frpcDir)
-                    updateConfigList()
-                    Toast.makeText(
-                        this@MainActivity,
-                        getString(R.string.toast_fetch_config_success),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                } catch (e: Exception) {
-                    Toast.makeText(
-                        this@MainActivity,
-                        getString(R.string.toast_fetch_config_failed, e.message ?: ""),
-                        Toast.LENGTH_LONG
-                    ).show()
+
+            val errorMsg = buildString {
+                rDefault.exceptionOrNull()?.let { append("default: ${it.message}\n") }
+                r4g.exceptionOrNull()?.let { append("4g: ${it.message}\n") }
+                rWifi.exceptionOrNull()?.let { append("wifi: ${it.message}\n") }
+            }.trim()
+
+            if (errorMsg.isNotEmpty()) {
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.toast_fetch_config_failed, errorMsg),
+                    Toast.LENGTH_LONG
+                ).show()
+                return@launch
+            }
+
+            try {
+                withContext(Dispatchers.IO) {
+                    fileDefault.writeText(rDefault.getOrThrow())
+                    file5g.writeText(r4g.getOrThrow())
+                    fileWifi.writeText(rWifi.getOrThrow())
                 }
-            }.onFailure { e ->
+                updateConfigList()
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.toast_fetch_config_success),
+                    Toast.LENGTH_SHORT
+                ).show()
+            } catch (e: Exception) {
                 Toast.makeText(
                     this@MainActivity,
                     getString(R.string.toast_fetch_config_failed, e.message ?: ""),
@@ -704,6 +788,7 @@ class MainActivity : ComponentActivity() {
     }
 
     fun checkConfig() {
+        val migrateDir = filesDir.parentFile ?: filesDir
         val frpcDir = FrpType.FRPC.getDir(this)
         if (frpcDir.exists() && !frpcDir.isDirectory) {
             frpcDir.delete()
@@ -716,7 +801,7 @@ class MainActivity : ComponentActivity() {
         if (!frpsDir.exists()) frpsDir.mkdirs()
         // v1.1旧版本配置迁移
         // 遍历文件夹内的所有文件
-        this.filesDir.listFiles()?.forEach { file ->
+        File(migrateDir, "${FrpType.FRPC.typeName}").listFiles()?.forEach { file ->
             if (file.isFile && file.name.endsWith(".toml")) {
                 // 构建目标文件路径
                 val destination = File(frpcDir, file.name)
@@ -728,59 +813,51 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-
-        ensureSingleFrpcConfig(frpcDir)
-        ensureDefaultFrpcConfig(frpcDir)
+        ensureDefaultFrpcConfigs(frpcDir)
     }
 
-    private fun ensureSingleFrpcConfig(frpcDir: File) {
-        val target = File(frpcDir, frpcSingleConfigFileName)
-        val files = frpcDir.listFiles()?.filter { it.isFile }.orEmpty()
-        if (files.isEmpty()) return
+    private fun ensureDefaultFrpcConfigs(frpcDir: File) {
+        // 首次启动：确保三份配置都存在（frpc / frpc_wifi / frpc_5g）
+        val fileDefault = File(frpcDir, frpcConfigFileNameDefault)
+        val fileWifi = File(frpcDir, frpcConfigFileNameWifi)
+        val file5g = File(frpcDir, frpcConfigFileName5g)
 
-        if (!target.exists()) {
-            val first = files.sortedBy { it.name }.firstOrNull() ?: return
-            if (first.absolutePath != target.absolutePath) {
-                first.renameTo(target)
-            }
-        }
-
-        frpcDir.listFiles()?.forEach { file ->
-            if (file.isFile && file.name != frpcSingleConfigFileName) {
-                file.delete()
-            }
-        }
-    }
-
-    private fun ensureDefaultFrpcConfig(frpcDir: File) {
-        val file = File(frpcDir, frpcSingleConfigFileName)
-        if (file.exists()) return
+        val needDefault = !fileDefault.exists()
+        val needWifi = !fileWifi.exists()
+        val need5g = !file5g.exists()
+        if (!needDefault && !needWifi && !need5g) return
 
         lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                RemoteConfigFetcher.fetchConfig(this@MainActivity)
+            val (rDefault, r5g, rWifi) = withContext(Dispatchers.IO) {
+                val rd = if (needDefault) RemoteConfigFetcher.fetchConfig(this@MainActivity, "拉取") else Result.success("")
+                val r5 = if (need5g) RemoteConfigFetcher.fetchConfig(this@MainActivity, "5g") else Result.success("")
+                val rw = if (needWifi) RemoteConfigFetcher.fetchConfig(this@MainActivity, "wifi") else Result.success("")
+                Triple(rd, r5, rw)
             }
-            result.onSuccess { content ->
-                try {
-                    withContext(Dispatchers.IO) {
-                        file.writeText(content)
-                    }
-                    updateConfigList()
-                    Toast.makeText(
-                        this@MainActivity,
-                        getString(R.string.toast_fetch_config_success),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                } catch (e: Exception) {
-                    Log.e("MainActivity", "Write default config failed: ${e.message}")
-                    Toast.makeText(
-                        this@MainActivity,
-                        getString(R.string.toast_fetch_config_failed, e.message ?: ""),
-                        Toast.LENGTH_LONG
-                    ).show()
+
+            val errorMsg = buildString {
+                if (needDefault) rDefault.exceptionOrNull()?.let { append("default: ${it.message}\n") }
+                if (need5g) r5g.exceptionOrNull()?.let { append("5g: ${it.message}\n") }
+                if (needWifi) rWifi.exceptionOrNull()?.let { append("wifi: ${it.message}\n") }
+            }.trim()
+
+            if (errorMsg.isNotEmpty()) {
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.toast_fetch_config_failed, errorMsg),
+                    Toast.LENGTH_LONG
+                ).show()
+                return@launch
+            }
+
+            try {
+                withContext(Dispatchers.IO) {
+                    if (needDefault) fileDefault.writeText(rDefault.getOrThrow())
+                    if (need5g) file5g.writeText(r5g.getOrThrow())
+                    if (needWifi) fileWifi.writeText(rWifi.getOrThrow())
                 }
-            }.onFailure { e ->
-                Log.e("MainActivity", "Fetch default config failed: ${e.message}")
+                updateConfigList()
+            } catch (e: Exception) {
                 Toast.makeText(
                     this@MainActivity,
                     getString(R.string.toast_fetch_config_failed, e.message ?: ""),
@@ -791,6 +868,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun deleteConfig(config: FrpConfig) {
+        if (config.type == FrpType.FRPC) {
+            return
+        }
         val file = config.getFile(this)
         if (file.exists()) {
             file.delete()
@@ -880,12 +960,14 @@ class MainActivity : ComponentActivity() {
 
     private fun updateConfigList() {
         val frpcDir = FrpType.FRPC.getDir(this)
-        ensureSingleFrpcConfig(frpcDir)
-        val frpcFile = File(frpcDir, frpcSingleConfigFileName)
-        frpcConfigList.value = if (frpcFile.exists()) {
-            listOf(FrpConfig(FrpType.FRPC, frpcSingleConfigFileName))
-        } else {
-            emptyList()
+        val fileNames = listOf(
+            frpcConfigFileNameDefault,
+            frpcConfigFileName5g,
+            frpcConfigFileNameWifi
+        )
+        frpcConfigList.value = fileNames.mapNotNull { name ->
+            val f = File(frpcDir, name)
+            if (f.exists()) FrpConfig(FrpType.FRPC, name) else null
         }
         frpsConfigList.value = (FrpType.FRPS.getDir(this).list()?.toList() ?: listOf()).map {
             FrpConfig(FrpType.FRPS, it)

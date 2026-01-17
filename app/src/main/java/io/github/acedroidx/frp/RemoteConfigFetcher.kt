@@ -9,15 +9,20 @@ import java.net.URL
 object RemoteConfigFetcher {
     private const val BASE_URL = "http://8.152.221.172:8080/generate_config"
 
-    fun buildUrl(context: Context): String {
+    fun buildUrl(context: Context, type: String? = null): String {
         val model = Build.MODEL
         val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-        return "$BASE_URL?model=${encode(model)}&deviceId=${encode(deviceId)}"
+        val base = "$BASE_URL?model=${encode(model)}&deviceId=${encode(deviceId)}"
+        return if (!type.isNullOrEmpty()) {
+            "$base&type=${encode(type)}"
+        } else {
+            base
+        }
     }
 
-    fun fetchConfig(context: Context): Result<String> {
+    fun fetchConfig(context: Context, type: String? = null): Result<String> {
         return runCatching {
-            val url = URL(buildUrl(context))
+            val url = URL(buildUrl(context, type))
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 connectTimeout = 10_000
                 readTimeout = 15_000

@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileWriter
 import java.io.BufferedReader
@@ -32,7 +34,9 @@ import java.net.Socket
 class ShellService : LifecycleService() {
     companion object {
         private const val MAX_LOG_LINES = 50
-        private const val SOCKS5_HEALTH_CHECK_INTERVAL_MS = 30_000L
+
+        private const val FRPC_CONFIG_CELL_5G = "frpc_5g.toml"
+        private const val FRPC_CONFIG_WIFI = "frpc_wifi.toml"
     }
 
     private val _processThreads = MutableStateFlow(mutableMapOf<FrpConfig, ShellThread>())
@@ -55,6 +59,12 @@ class ShellService : LifecycleService() {
                 put(config, "")
             }
         }
+    }
+
+    private fun logToConfig(config: FrpConfig, msg: String) {
+        // 让用户能在 UI 的“配置日志”里直接看到联动启动的关键状态，方便定位 frpc 未启动原因
+        Log.i("adx", "[${config.fileName}] $msg")
+        appendToConfigLog(config, msg)
     }
 
     fun getConfigLog(config: FrpConfig): String {
@@ -172,7 +182,14 @@ class ShellService : LifecycleService() {
     // Binder given to clients
     private val binder = LocalBinder()
 
-    private var socks5MonitorJob: Job? = null
+    private var frpcLinkMonitorJob: Job? = null
+
+    // 仅对需要与端口联动的 frpc 配置生效：用户“期望运行”才自动拉起
+    private val desiredLinkedFrpcConfigs = MutableStateFlow(setOf<FrpConfig>())
+    private val pendingRestartLinkedFrpcConfigs = MutableStateFlow(setOf<FrpConfig>())
+
+    // 给 UI 使用：联动配置（frpc_wifi / frpc_5g）即使还没真正启动 frpc 进程，也要能体现“用户已打开开关”的状态
+    val desiredLinkedFrpcConfigsFlow = desiredLinkedFrpcConfigs.asStateFlow()
 
     /**
      * Class used for the client Binder.  Because we know this service always
@@ -185,14 +202,13 @@ class ShellService : LifecycleService() {
 
     override fun onBind(intent: Intent): IBinder {
         super.onBind(intent)
-        ensureSocks5Monitor()
+        ensureFrpcLinkMonitor()
         return binder
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-
-        ensureSocks5Monitor()
+        ensureFrpcLinkMonitor()
 
         // 处理 STOP_ALL action，不需要 frpConfig 参数
         if (intent?.action == ShellServiceAction.STOP_ALL) {
@@ -202,7 +218,11 @@ class ShellService : LifecycleService() {
                 stopFrp(config)
             }
 
-            syncSocks5WithFrpc()
+            // STOP_ALL 时直接关闭两个 socks5 service，并清理联动状态
+            desiredLinkedFrpcConfigs.value = emptySet()
+            pendingRestartLinkedFrpcConfigs.value = emptySet()
+            stopWifiSocks5Service()
+            stopFiveGSocks5Service()
 
             // 停止前台服务
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -252,24 +272,24 @@ class ShellService : LifecycleService() {
         when (intent?.action) {
             ShellServiceAction.START -> {
                 for (config in frpConfig) {
+                    markLinkedFrpcDesired(config, true)
                     startFrp(config)
                 }
+                startForeground(1, showNotification())
 
-                syncSocks5WithFrpc()
-                if (!hideServiceToast) {
+                // 仅当确实启动了 frp 进程时才提示“已启动”，避免联动等待 socks5 端口导致的误导
+                if (!hideServiceToast && _processThreads.value.isNotEmpty()) {
                     Toast.makeText(
                         this, getString(R.string.service_start_toast), Toast.LENGTH_SHORT
                     ).show()
                 }
-                startForeground(1, showNotification())
             }
 
             ShellServiceAction.STOP -> {
                 for (config in frpConfig) {
+                    markLinkedFrpcDesired(config, false)
                     stopFrp(config)
                 }
-
-                syncSocks5WithFrpc()
                 startForeground(1, showNotification())
                 if (_processThreads.value.isEmpty()) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -291,16 +311,46 @@ class ShellService : LifecycleService() {
 
     private fun startFrp(config: FrpConfig) {
         Log.d("adx", "start config is $config")
+
+        // frpc_5g / frpc_wifi 需要与 socks5 端口联动：端口不可用则不启动
+        val requiredPort = getRequiredSocks5PortForLinkedFrpc(config)
+        if (requiredPort != null) {
+            logToConfig(config, "联动启动：需要等待本地端口 $requiredPort")
+            // 先确保对应 socks5 service 已启动（WiFi/5G 互不影响）
+            // 注意：不能在主线程用 Thread.sleep 轮询等待，否则会阻塞同进程 service 启动，导致端口永远等不到
+            startLinkedSocks5Service(config)
+
+            lifecycleScope.launch {
+                val ok = waitLocalPortOpenSuspend(requiredPort)
+                if (!ok) {
+                    logToConfig(config, "等待端口 $requiredPort 超时：暂不启动 frpc，进入待重启队列")
+                    // 端口暂不可用：加入待重启集合，交由联动监控在端口恢复后自动启动
+                    pendingRestartLinkedFrpcConfigs.update { it + config }
+                    return@launch
+                }
+                logToConfig(config, "端口 $requiredPort 已就绪，准备启动 frpc")
+                startFrpAfterSocks5Ready(config, requiredPort)
+            }
+            return
+        }
+
+        startFrpAfterSocks5Ready(config, null)
+    }
+
+    private fun startFrpAfterSocks5Ready(config: FrpConfig, requiredPort: Int?) {
+
         val dir = config.getDir(this)
         val file = config.getFile(this)
         if (!file.exists()) {
             Log.w("adx", "file is not exist,service won't start")
+            logToConfig(config, "启动失败：配置文件不存在 -> ${file.absolutePath}")
             Toast.makeText(this, getString(R.string.toast_config_not_exist), Toast.LENGTH_SHORT)
                 .show()
             return
         }
         if (_processThreads.value.contains(config)) {
             Log.w("adx", "frp is already running")
+            logToConfig(config, "已在运行：跳过重复启动")
             // Respect user preference to hide service start/stop related toasts
             val hideServiceToast = getSharedPreferences("data", MODE_PRIVATE).getBoolean(
                 PreferencesKey.HIDE_SERVICE_TOAST, false
@@ -321,6 +371,7 @@ class ShellService : LifecycleService() {
         if (!frpBinFile.exists()) {
             val msg = "Missing native binary: ${frpBinFile.absolutePath}"
             Log.e("adx", msg)
+            logToConfig(config, "启动失败：找不到可执行文件 -> ${frpBinFile.absolutePath}")
             Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
             return
         }
@@ -328,12 +379,21 @@ class ShellService : LifecycleService() {
         val commandList =
             listOf(frpBinFile.absolutePath, "-c", config.fileName)
         Log.d("adx", "${dir}\n${commandList}")
+        logToConfig(config, "执行命令：${commandList.joinToString(" ")}")
         try {
             val thread = runCommand(commandList, dir, config)
             _processThreads.update { it.toMutableMap().apply { put(config, thread) } }
-            syncSocks5WithFrpc()
+
+            // 注意：这里只能说明“进程已拉起并加入列表”，不代表配置一定正确。若配置错误，后续会很快输出退出码。
+            logToConfig(config, "frpc 进程已启动（已加入运行列表）")
+
+            // 如果是联动配置且启动成功，清理待重启标记
+            if (requiredPort != null) {
+                pendingRestartLinkedFrpcConfigs.update { it - config }
+            }
         } catch (e: Exception) {
             Log.e("adx", e.stackTraceToString())
+            logToConfig(config, "启动异常：${e.javaClass.simpleName} - ${e.message}")
             Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
             stopSelf()
         }
@@ -346,7 +406,6 @@ class ShellService : LifecycleService() {
         _processThreads.update {
             it.toMutableMap().apply { remove(config) }
         }
-        syncSocks5WithFrpc()
     }
 
     override fun onDestroy() {
@@ -359,67 +418,151 @@ class ShellService : LifecycleService() {
             _processThreads.update { emptyMap() }
         }
 
-        socks5MonitorJob?.cancel()
-        socks5MonitorJob = null
-        stopSocks5Service()
+        frpcLinkMonitorJob?.cancel()
+        frpcLinkMonitorJob = null
+
+        desiredLinkedFrpcConfigs.value = emptySet()
+        pendingRestartLinkedFrpcConfigs.value = emptySet()
+
+        stopWifiSocks5Service()
+        stopFiveGSocks5Service()
     }
 
-    private fun ensureSocks5Monitor() {
-        if (socks5MonitorJob != null) return
+    private fun ensureFrpcLinkMonitor() {
+        if (frpcLinkMonitorJob != null) return
 
-        socks5MonitorJob = lifecycleScope.launch {
+        frpcLinkMonitorJob = lifecycleScope.launch {
             while (isActive) {
                 try {
-                    syncSocks5WithFrpc()
+                    syncLinkedFrpcWithSocks5Port()
                 } catch (e: Exception) {
-                    Log.w("adx", "socks5 monitor error: ${e.message}")
+                    Log.w("adx", "frpc link monitor error: ${e.message}")
                 }
-                delay(SOCKS5_HEALTH_CHECK_INTERVAL_MS)
+                delay(1000)
             }
         }
     }
 
-    private fun syncSocks5WithFrpc() {
-        val hasFrpcRunning = _processThreads.value.keys.any { it.type == FrpType.FRPC }
-        if (hasFrpcRunning) {
-            // 启动 frpc 时确保 socks5 服务可用；不可用则拉起
-            if (!isSocks5ServiceHealthy()) {
-                startSocks5Service()
+    private suspend fun syncLinkedFrpcWithSocks5Port() {
+        val desired = desiredLinkedFrpcConfigs.value
+        if (desired.isEmpty()) return
+
+        desired.forEach { config ->
+            val requiredPort = getRequiredSocks5PortForLinkedFrpc(config) ?: return@forEach
+
+            // 确保对应 socks5 service 在
+            startLinkedSocks5Service(config)
+
+            val portOk = isLocalPortOpenSuspend(requiredPort)
+            val isRunning = _processThreads.value.containsKey(config)
+
+            if (!portOk) {
+                if (isRunning) {
+                    // 端口不可用：自动关闭对应 frpc
+                    pendingRestartLinkedFrpcConfigs.update { it + config }
+                    stopFrp(config)
+                } else {
+                    pendingRestartLinkedFrpcConfigs.update { it + config }
+                }
+                return@forEach
             }
+
+            // 端口可用：如果之前因为端口不可用被停止，则自动恢复
+            if (!isRunning && pendingRestartLinkedFrpcConfigs.value.contains(config)) {
+                startFrp(config)
+            }
+        }
+    }
+
+    private fun markLinkedFrpcDesired(config: FrpConfig, desired: Boolean) {
+        if (getRequiredSocks5PortForLinkedFrpc(config) == null) return
+        if (desired) {
+            desiredLinkedFrpcConfigs.update { it + config }
         } else {
-            // 没有任何 frpc 时关闭 socks5（与端口转发保持一致）
-            stopSocks5Service()
+            desiredLinkedFrpcConfigs.update { it - config }
+            pendingRestartLinkedFrpcConfigs.update { it - config }
+            stopLinkedSocks5ServiceIfIdle(config)
         }
     }
 
-    private fun startSocks5Service() {
-        val intent = Intent(this, Socks5Service::class.java).apply {
-            action = Socks5Service.ACTION_START
+    private fun getRequiredSocks5PortForLinkedFrpc(config: FrpConfig): Int? {
+        if (config.type != FrpType.FRPC) return null
+        return when (config.fileName) {
+            FRPC_CONFIG_CELL_5G -> 10002
+            FRPC_CONFIG_WIFI -> 10001
+            else -> null
+        }
+    }
+
+    private fun startLinkedSocks5Service(config: FrpConfig) {
+        when (getRequiredSocks5PortForLinkedFrpc(config)) {
+            10001 -> startWifiSocks5Service()
+            10002 -> startFiveGSocks5Service()
+        }
+    }
+
+    private fun stopLinkedSocks5ServiceIfIdle(config: FrpConfig) {
+        when (getRequiredSocks5PortForLinkedFrpc(config)) {
+            10001 -> {
+                val hasAnyWifiDesired = desiredLinkedFrpcConfigs.value.any { getRequiredSocks5PortForLinkedFrpc(it) == 10001 }
+                if (!hasAnyWifiDesired) stopWifiSocks5Service()
+            }
+
+            10002 -> {
+                val hasAnyCellDesired = desiredLinkedFrpcConfigs.value.any { getRequiredSocks5PortForLinkedFrpc(it) == 10002 }
+                if (!hasAnyCellDesired) stopFiveGSocks5Service()
+            }
+        }
+    }
+
+    private suspend fun waitLocalPortOpenSuspend(port: Int): Boolean {
+        // 启动 socks5 后给一点时间让端口真正开始监听
+        repeat(40) {
+            if (isLocalPortOpenSuspend(port)) return true
+            delay(200)
+        }
+        return false
+    }
+
+    private fun startWifiSocks5Service() {
+        val intent = Intent(this, WifiSocks5Service::class.java).apply {
+            action = WifiSocks5Service.ACTION_START
         }
         ContextCompat.startForegroundService(this, intent)
     }
 
-    private fun stopSocks5Service() {
-        val intent = Intent(this, Socks5Service::class.java).apply {
-            action = Socks5Service.ACTION_STOP
+    private fun stopWifiSocks5Service() {
+        val intent = Intent(this, WifiSocks5Service::class.java).apply {
+            action = WifiSocks5Service.ACTION_STOP
         }
         startService(intent)
     }
 
-    private fun isSocks5ServiceHealthy(): Boolean {
-        if (!Socks5Service.isRunning) return false
-        // 同时检查两个监听端口，避免 service 进程在但监听线程已挂
-        return isLocalPortOpen(10001) && isLocalPortOpen(10002)
+    private fun startFiveGSocks5Service() {
+        val intent = Intent(this, FiveGSocks5Service::class.java).apply {
+            action = FiveGSocks5Service.ACTION_START
+        }
+        ContextCompat.startForegroundService(this, intent)
     }
 
-    private fun isLocalPortOpen(port: Int): Boolean {
-        return try {
-            Socket().use { s ->
-                s.connect(InetSocketAddress("127.0.0.1", port), 500)
+    private fun stopFiveGSocks5Service() {
+        val intent = Intent(this, FiveGSocks5Service::class.java).apply {
+            action = FiveGSocks5Service.ACTION_STOP
+        }
+        startService(intent)
+    }
+
+    private suspend fun isLocalPortOpenSuspend(port: Int): Boolean {
+        // 端口探测必须在 IO 线程执行；否则在部分系统上会触发 NetworkOnMainThreadException，导致永远探测失败
+        return withContext(Dispatchers.IO) {
+            try {
+                Socket().use { s ->
+                    s.connect(InetSocketAddress("127.0.0.1", port), 500)
+                }
+                true
+            } catch (_: Exception) {
+                false
             }
-            true
-        } catch (_: Exception) {
-            false
         }
     }
 

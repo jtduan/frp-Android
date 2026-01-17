@@ -83,7 +83,6 @@
     <string name="allow_tasker_title">Allow Tasker</string>
     <string name="exclude_from_recents_title">Exclude from recents</string>
     <string name="hide_service_toast_title">Hide service start/stop toast</string>
-    <string name="local_socks5_title">Local SOCKS5 (10001 WiFi / 10002 4G)</string>
     <string name="socks5_notification_title">Local SOCKS5 Service</string>
     <string name="socks5_notification_content">Listening on %1$d (WiFi) and %2$d (4G)</string>
     <string name="notification_permission_denied_message">Notification permission is not granted, background notifications will not be shown.</string>
@@ -93,6 +92,7 @@
     <string name="frps_label">frps</string>
     <string name="config_running">Running</string>
     <string name="content_desc_edit">Edit</string>
+    <string name="content_desc_view">View</string>
     <string name="content_desc_delete_config">Delete config</string>
     <string name="config_log_title">Log</string>
     <string name="confirm_delete_title">Confirm delete</string>

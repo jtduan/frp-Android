@@ -82,7 +82,6 @@
     <string name="allow_tasker_title">允许 Tasker 调用</string>
     <string name="exclude_from_recents_title">最近任务中排除</string>
     <string name="hide_service_toast_title">隐藏服务启停提示</string>
-    <string name="local_socks5_title">本机 SOCKS5（10001 走 WiFi / 10002 走 4G）</string>
     <string name="socks5_notification_title">本机 SOCKS5 服务</string>
     <string name="socks5_notification_content">监听 %1$d（WiFi）和 %2$d（4G）</string>
     <string name="notification_permission_denied_message">通知权限未授予，后台运行通知将无法显示</string>
@@ -92,6 +91,7 @@
     <string name="frps_label">frps</string>
     <string name="config_running">运行中</string>
     <string name="content_desc_edit">编辑</string>
+    <string name="content_desc_view">查看</string>
     <string name="content_desc_delete_config">删除配置</string>
     <string name="config_log_title">日志</string>
     <string name="confirm_delete_title">确认删除</string>

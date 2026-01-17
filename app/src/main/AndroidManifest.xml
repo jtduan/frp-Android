@@ -69,7 +69,17 @@
         </service>
 
         <service
-            android:name=".Socks5Service"
+            android:name=".WifiSocks5Service"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="explanation_for_special_use" />
+        </service>
+
+        <service
+            android:name=".FiveGSocks5Service"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="specialUse">
