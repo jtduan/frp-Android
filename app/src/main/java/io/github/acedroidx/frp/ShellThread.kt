@@ -50,6 +50,10 @@ class ShellThread(
 
     fun stopProcess() {
         try {
+            if (!::process.isInitialized) {
+                outputCallback("Process not started, skip stopping")
+                return
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 process.destroyForcibly()
             } else {

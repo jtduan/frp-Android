@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -25,15 +24,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -44,9 +40,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import io.github.acedroidx.frp.ui.theme.FrpTheme
 import io.github.acedroidx.frp.ui.theme.ThemeModeKeys
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import androidx.compose.runtime.collectAsState
 import androidx.core.content.edit
@@ -121,7 +121,6 @@ class ConfigActivity : ComponentActivity() {
     @Preview(showBackground = true)
     @Composable
     fun MainContent(contentPadding: PaddingValues = PaddingValues(0.dp)) {
-        val openDialog = remember { mutableStateOf(false) }
         val focusRequester = remember { FocusRequester() }
 
         LaunchedEffect(Unit) {
@@ -141,14 +140,8 @@ class ConfigActivity : ComponentActivity() {
                     .fillMaxWidth()
                     .padding(12.dp)
             ) {
-                Button(onClick = { saveConfig(); closeActivity() }) {
-                    Text(stringResource(R.string.saveConfigButton))
-                }
-                Button(onClick = { closeActivity() }) {
-                    Text(stringResource(R.string.dontSaveConfigButton))
-                }
-                Button(onClick = { openDialog.value = true }) {
-                    Text(stringResource(R.string.rename))
+                Button(onClick = { fetchConfigAndUpdate() }) {
+                    Text(stringResource(R.string.fetch_config_button))
                 }
             }
             Row(
@@ -165,8 +158,9 @@ class ConfigActivity : ComponentActivity() {
             }
             TextField(
                 value = configEditText.collectAsStateWithLifecycle("").value,
-                onValueChange = { configEditText.value = it },
+                onValueChange = { },
                 textStyle = MaterialTheme.typography.bodyMedium.merge(fontFamily = FontFamily.Monospace),
+                readOnly = true,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
@@ -174,42 +168,6 @@ class ConfigActivity : ComponentActivity() {
                     .focusRequester(focusRequester)
             )
         }
-        if (openDialog.value) {
-            RenameDialog(configFile.name.removeSuffix(".toml")) { openDialog.value = false }
-        }
-    }
-
-    @Composable
-    fun RenameDialog(
-        originName: String,
-        onClose: () -> Unit,
-    ) {
-        var text by remember { mutableStateOf(originName) }
-        AlertDialog(title = {
-            Text(stringResource(R.string.rename))
-        }, icon = {
-            Icon(
-                painterResource(id = R.drawable.ic_rename),
-                contentDescription = stringResource(R.string.content_desc_rename_icon)
-            )
-        }, text = {
-            TextField(text, onValueChange = { text = it })
-        }, onDismissRequest = {
-            onClose()
-        }, confirmButton = {
-            TextButton(onClick = {
-                renameConfig("$text.toml")
-                onClose()
-            }) {
-                Text(stringResource(R.string.confirm))
-            }
-        }, dismissButton = {
-            TextButton(onClick = {
-                onClose()
-            }) {
-                Text(stringResource(R.string.dismiss))
-            }
-        })
     }
 
     fun readConfig() {
@@ -230,17 +188,43 @@ class ConfigActivity : ComponentActivity() {
         }
     }
 
-    fun saveConfig() {
-        configFile.writeText(configEditText.value)
-    }
-
-    fun renameConfig(newName: String) {
-        val originAutoStart = isAutoStart.value
-        setAutoStart(false)
-        val newFile = File(configFile.parent, newName)
-        configFile.renameTo(newFile)
-        configFile = newFile
-        setAutoStart(originAutoStart)
+    fun fetchConfigAndUpdate() {
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                RemoteConfigFetcher.fetchConfig(this@ConfigActivity)
+            }
+            result.onSuccess { content ->
+                try {
+                    withContext(Dispatchers.IO) {
+                        val parent = configFile.parentFile
+                        if (parent != null && !parent.exists()) {
+                            parent.mkdirs()
+                        }
+                        configFile.writeText(content)
+                    }
+                    configEditText.value = content
+                    Toast.makeText(
+                        this@ConfigActivity,
+                        getString(R.string.toast_fetch_config_success),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } catch (e: Exception) {
+                    Log.e("adx", "write fetched config failed: ${e.message}")
+                    Toast.makeText(
+                        this@ConfigActivity,
+                        getString(R.string.toast_fetch_config_failed, e.message ?: ""),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }.onFailure { e ->
+                Log.e("adx", "fetch config failed: ${e.message}")
+                Toast.makeText(
+                    this@ConfigActivity,
+                    getString(R.string.toast_fetch_config_failed, e.message ?: ""),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     fun readIsAutoStart() {

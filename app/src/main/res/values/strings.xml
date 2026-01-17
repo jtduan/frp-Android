@@ -18,7 +18,7 @@
     <string name="auto_start_broadcast_help_message">When enabled, receiving the start broadcast (action: %1$s) will automatically start every configuration whose "Auto-start Switch" is on.\n\nExample:\nadb shell am broadcast -a %1$s io.github.acedroidx.frp</string>
     <string name="auto_stop_broadcast_help_message">When enabled, receiving the stop broadcast (action: %1$s) will automatically stop every configuration whose "Auto-start Switch" is on.\n\nExample:\nadb shell am broadcast -a %1$s io.github.acedroidx.frp</string>
     <string name="auto_start_broadcast_extra_help_message">When enabled, the broadcast may carry %2$s (frpc or frps) and %3$s (config file name) to start or stop only the specified config; otherwise it affects all configs with auto-start enabled.\n\nExamples:\n\n# Start frpc config named example.toml\nadb shell am broadcast -a %1$s -e %2$s frpc -e %3$s example.toml io.github.acedroidx.frp\n\n# Start frps config named server.toml\nadb shell am broadcast -a %1$s -e %2$s frps -e %3$s server.toml io.github.acedroidx.frp\n\n# Stop frpc config named example.toml\nadb shell am broadcast -a %4$s -e %2$s frpc -e %3$s example.toml io.github.acedroidx.frp\n\n# Stop frps config named server.toml\nadb shell am broadcast -a %4$s -e %2$s frps -e %3$s server.toml io.github.acedroidx.frp</string>
-    <string name="addConfigButton">Add Config</string>
+    <string name="addConfigButton">Fetch Config</string>
     <string name="aboutButton">About</string>
     <string name="frp_log">frp Log</string>
     <string name="deleteButton">Clear</string>
@@ -39,6 +39,9 @@
     <string name="rename">Rename</string>
     <string name="confirm">Confirm</string>
     <string name="dismiss">Dismiss</string>
+    <string name="fetch_config_button">Fetch Config</string>
+    <string name="toast_fetch_config_success">Config fetched</string>
+    <string name="toast_fetch_config_failed">Fetch config failed: %1$s</string>
     <string name="create_frp_select">Select the type of frp to create</string>
     <string name="create_config_template_title">Choose a template to create</string>
     <string name="template_empty_message">No templates found. Please check assets/examples.</string>
@@ -80,6 +83,9 @@
     <string name="allow_tasker_title">Allow Tasker</string>
     <string name="exclude_from_recents_title">Exclude from recents</string>
     <string name="hide_service_toast_title">Hide service start/stop toast</string>
+    <string name="local_socks5_title">Local SOCKS5 (10001 WiFi / 10002 4G)</string>
+    <string name="socks5_notification_title">Local SOCKS5 Service</string>
+    <string name="socks5_notification_content">Listening on %1$d (WiFi) and %2$d (4G)</string>
     <string name="notification_permission_denied_message">Notification permission is not granted, background notifications will not be shown.</string>
     <string name="notification_permission_action_settings">Open settings</string>
     <string name="config_display_value">%1$s: %2$s</string>

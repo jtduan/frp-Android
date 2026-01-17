@@ -9,21 +9,30 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileWriter
 import java.io.BufferedReader
 import java.io.FileReader
 import java.util.Collections.emptyMap
+import java.net.InetSocketAddress
+import java.net.Socket
 
 
 class ShellService : LifecycleService() {
     companion object {
         private const val MAX_LOG_LINES = 50
+        private const val SOCKS5_HEALTH_CHECK_INTERVAL_MS = 30_000L
     }
 
     private val _processThreads = MutableStateFlow(mutableMapOf<FrpConfig, ShellThread>())
@@ -163,6 +172,8 @@ class ShellService : LifecycleService() {
     // Binder given to clients
     private val binder = LocalBinder()
 
+    private var socks5MonitorJob: Job? = null
+
     /**
      * Class used for the client Binder.  Because we know this service always
      * runs in the same process as its clients, we don't need to deal with IPC.
@@ -174,11 +185,14 @@ class ShellService : LifecycleService() {
 
     override fun onBind(intent: Intent): IBinder {
         super.onBind(intent)
+        ensureSocks5Monitor()
         return binder
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+
+        ensureSocks5Monitor()
 
         // 处理 STOP_ALL action，不需要 frpConfig 参数
         if (intent?.action == ShellServiceAction.STOP_ALL) {
@@ -187,6 +201,8 @@ class ShellService : LifecycleService() {
             for (config in allConfigs) {
                 stopFrp(config)
             }
+
+            syncSocks5WithFrpc()
 
             // 停止前台服务
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -238,6 +254,8 @@ class ShellService : LifecycleService() {
                 for (config in frpConfig) {
                     startFrp(config)
                 }
+
+                syncSocks5WithFrpc()
                 if (!hideServiceToast) {
                     Toast.makeText(
                         this, getString(R.string.service_start_toast), Toast.LENGTH_SHORT
@@ -250,6 +268,8 @@ class ShellService : LifecycleService() {
                 for (config in frpConfig) {
                     stopFrp(config)
                 }
+
+                syncSocks5WithFrpc()
                 startForeground(1, showNotification())
                 if (_processThreads.value.isEmpty()) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -294,12 +314,24 @@ class ShellService : LifecycleService() {
         val ainfo = packageManager.getApplicationInfo(
             packageName, PackageManager.GET_SHARED_LIBRARY_FILES
         )
+
+        // 启动前检查：确认 nativeLibraryDir 下存在对应的 frp 二进制（libfrpc.so / libfrps.so）
+        // 如果 APK 未打包 jniLibs，这里会直接缺文件，ProcessBuilder 会报 error=2
+        val frpBinFile = File(ainfo.nativeLibraryDir, config.type.getLibName())
+        if (!frpBinFile.exists()) {
+            val msg = "Missing native binary: ${frpBinFile.absolutePath}"
+            Log.e("adx", msg)
+            Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+            return
+        }
+
         val commandList =
-            listOf("${ainfo.nativeLibraryDir}/${config.type.getLibName()}", "-c", config.fileName)
+            listOf(frpBinFile.absolutePath, "-c", config.fileName)
         Log.d("adx", "${dir}\n${commandList}")
         try {
             val thread = runCommand(commandList, dir, config)
             _processThreads.update { it.toMutableMap().apply { put(config, thread) } }
+            syncSocks5WithFrpc()
         } catch (e: Exception) {
             Log.e("adx", e.stackTraceToString())
             Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
@@ -314,6 +346,7 @@ class ShellService : LifecycleService() {
         _processThreads.update {
             it.toMutableMap().apply { remove(config) }
         }
+        syncSocks5WithFrpc()
     }
 
     override fun onDestroy() {
@@ -324,6 +357,69 @@ class ShellService : LifecycleService() {
                 it.value.stopProcess()
             }
             _processThreads.update { emptyMap() }
+        }
+
+        socks5MonitorJob?.cancel()
+        socks5MonitorJob = null
+        stopSocks5Service()
+    }
+
+    private fun ensureSocks5Monitor() {
+        if (socks5MonitorJob != null) return
+
+        socks5MonitorJob = lifecycleScope.launch {
+            while (isActive) {
+                try {
+                    syncSocks5WithFrpc()
+                } catch (e: Exception) {
+                    Log.w("adx", "socks5 monitor error: ${e.message}")
+                }
+                delay(SOCKS5_HEALTH_CHECK_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun syncSocks5WithFrpc() {
+        val hasFrpcRunning = _processThreads.value.keys.any { it.type == FrpType.FRPC }
+        if (hasFrpcRunning) {
+            // 启动 frpc 时确保 socks5 服务可用；不可用则拉起
+            if (!isSocks5ServiceHealthy()) {
+                startSocks5Service()
+            }
+        } else {
+            // 没有任何 frpc 时关闭 socks5（与端口转发保持一致）
+            stopSocks5Service()
+        }
+    }
+
+    private fun startSocks5Service() {
+        val intent = Intent(this, Socks5Service::class.java).apply {
+            action = Socks5Service.ACTION_START
+        }
+        ContextCompat.startForegroundService(this, intent)
+    }
+
+    private fun stopSocks5Service() {
+        val intent = Intent(this, Socks5Service::class.java).apply {
+            action = Socks5Service.ACTION_STOP
+        }
+        startService(intent)
+    }
+
+    private fun isSocks5ServiceHealthy(): Boolean {
+        if (!Socks5Service.isRunning) return false
+        // 同时检查两个监听端口，避免 service 进程在但监听线程已挂
+        return isLocalPortOpen(10001) && isLocalPortOpen(10002)
+    }
+
+    private fun isLocalPortOpen(port: Int): Boolean {
+        return try {
+            Socket().use { s ->
+                s.connect(InetSocketAddress("127.0.0.1", port), 500)
+            }
+            true
+        } catch (_: Exception) {
+            false
         }
     }
 

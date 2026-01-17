@@ -68,6 +68,10 @@ fi
 
 log "Fetching release info from GitHub: ${API_URL}"
 
+# curl 参数：兼容部分网络环境下 HTTP/2 报错（例如 Error in the HTTP2 framing layer）
+# 并增加重试，避免偶发网络抖动导致失败
+CURL_ARGS=( -sSL --fail --location --http1.1 --retry 3 --retry-all-errors --connect-timeout 15 )
+
 AUTH_ARGS=()
 if [[ -n "$GITHUB_TOKEN" ]]; then
   AUTH_ARGS=( -H "Authorization: token ${GITHUB_TOKEN}" )
@@ -79,18 +83,31 @@ fi
 
 # Get release JSON
 # Fetch release JSON (fail hard if GitHub returns an error)
-if ! release_json=$(curl -sSL --fail "${API_URL}" -H "Accept: application/vnd.github.v3+json" "${AUTH_ARGS[@]}" ); then
-  err "Failed to fetch release info from GitHub (${API_URL})"; exit 3
+# 注意：macOS 自带 bash(3.2) 在 set -u 下展开空数组 "${AUTH_ARGS[@]}" 会触发 unbound variable
+if [[ ${#AUTH_ARGS[@]} -gt 0 ]]; then
+  if ! release_json=$(curl "${CURL_ARGS[@]}" "${API_URL}" -H "Accept: application/vnd.github.v3+json" "${AUTH_ARGS[@]}" ); then
+    err "Failed to fetch release info from GitHub (${API_URL})"; exit 3
+  fi
+else
+  if ! release_json=$(curl "${CURL_ARGS[@]}" "${API_URL}" -H "Accept: application/vnd.github.v3+json" ); then
+    err "Failed to fetch release info from GitHub (${API_URL})"; exit 3
+  fi
 fi
 if [[ -z "${release_json}" || "${release_json}" == "null" ]]; then
   err "Release info is empty or null from GitHub"; exit 3
 fi
 
-# Architecture mapping
-declare -A ARCH_MAP
-ARCH_MAP["arm64-v8a"]="android_arm64"
-ARCH_MAP["x86_64"]="linux_amd64"
-ARCH_MAP["armeabi-v7a"]="linux_arm"
+# Architecture mapping (兼容 macOS 默认 bash 3.2：不支持 declare -A)
+ABIS=("arm64-v8a" "x86_64" "armeabi-v7a")
+map_abi_to_pattern() {
+  local abi="$1"
+  case "$abi" in
+    "arm64-v8a") echo "android_arm64" ;;
+    "x86_64") echo "linux_amd64" ;;
+    "armeabi-v7a") echo "linux_arm" ;;
+    *) echo "" ;;
+  esac
+}
 
 # Make DEST_BASE if not exists
 if [[ $DRY_RUN -eq 0 && ! -d ${DEST_BASE} ]]; then
@@ -141,7 +158,7 @@ process_asset() {
     log "DRY RUN: would download ${asset_url} to ${filename}"
   else
     log "Downloading ${asset_url}..."
-    if ! curl -sSL --fail -o "${filename}" "${asset_url}"; then
+    if ! curl "${CURL_ARGS[@]}" -o "${filename}" "${asset_url}"; then
       err "Download failed for ${asset_url}";
       # 2 = download failed (fatal)
       return 2
@@ -238,8 +255,11 @@ process_asset() {
 }
 
 # Process each ARCH
-for abi in "${!ARCH_MAP[@]}"; do
-  mapping=${ARCH_MAP[$abi]}
+for abi in "${ABIS[@]}"; do
+  mapping=$(map_abi_to_pattern "$abi")
+  if [[ -z "$mapping" ]]; then
+    err "Unknown abi: ${abi}"; exit 6
+  fi
   # For linux arm, accept both linux_arm and linux_arm_hf (hf = hardware float) in matching
   if [[ "$mapping" == "linux_arm" ]]; then
     # 优先尝试 linux_arm_hf，其次退回 linux_arm

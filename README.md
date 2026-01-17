@@ -11,6 +11,8 @@ A frp client for Android
 
 ## 编译方法
 
+./gradlew assembleRelease
+
 如果您想更换frp内核，可以通过Github Actions或通过Android Studio编译
 
 下述密钥相关步骤可选，若跳过该步骤将会使用Android公开的默认调试密钥进行签名

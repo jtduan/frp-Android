@@ -128,6 +128,10 @@ android {
     }
     namespace = "io.github.acedroidx.frp"
 
+    lint {
+        disable += "NewApi"
+    }
+
     applicationVariants.all {
         outputs.all {
             val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl

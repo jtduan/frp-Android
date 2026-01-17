@@ -17,7 +17,7 @@
     <string name="auto_start_broadcast_help_message">开启后，当应用收到启动广播（动作：%1$s）时，会自动启动所有在各自配置中已开启“自启动开关”的配置。\n\n示例：\nadb shell am broadcast -a %1$s io.github.acedroidx.frp</string>
     <string name="auto_stop_broadcast_help_message">开启后，当应用收到停止广播（动作：%1$s）时，会自动停止所有在各自配置中已开启“自启动开关”的配置。\n\n示例：\nadb shell am broadcast -a %1$s io.github.acedroidx.frp</string>
     <string name="auto_start_broadcast_extra_help_message">开启后，广播可携带参数 %2$s（frpc 或 frps）和 %3$s（配置文件名）来仅对指定配置执行启动或停止；否则广播会按默认行为对所有已开启自启动的配置生效。\n\n示例：\n\n# 启动 frpc 类型、配置名为 example.toml 的配置\nadb shell am broadcast -a %1$s -e %2$s frpc -e %3$s example.toml io.github.acedroidx.frp\n\n# 启动 frps 类型、配置名为 server.toml 的配置\nadb shell am broadcast -a %1$s -e %2$s frps -e %3$s server.toml io.github.acedroidx.frp\n\n# 停止 frpc 类型、配置名为 example.toml 的配置\nadb shell am broadcast -a %4$s -e %2$s frpc -e %3$s example.toml io.github.acedroidx.frp\n\n# 停止 frps 类型、配置名为 server.toml 的配置\nadb shell am broadcast -a %4$s -e %2$s frps -e %3$s server.toml io.github.acedroidx.frp</string>
-    <string name="addConfigButton">添加配置</string>
+    <string name="addConfigButton">拉取配置</string>
     <string name="aboutButton">关于</string>
     <string name="frp_log">Frp日志</string>
     <string name="deleteButton">清除</string>
@@ -38,6 +38,9 @@
     <string name="rename">重命名</string>
     <string name="confirm">确认</string>
     <string name="dismiss">取消</string>
+    <string name="fetch_config_button">拉取配置</string>
+    <string name="toast_fetch_config_success">配置拉取成功</string>
+    <string name="toast_fetch_config_failed">配置拉取失败：%1$s</string>
     <string name="create_frp_select">选择要创建的frp类型</string>
     <string name="create_config_template_title">选择模板创建配置</string>
     <string name="template_empty_message">暂无可用模板，请检查 assets/examples 目录</string>
@@ -79,6 +82,9 @@
     <string name="allow_tasker_title">允许 Tasker 调用</string>
     <string name="exclude_from_recents_title">最近任务中排除</string>
     <string name="hide_service_toast_title">隐藏服务启停提示</string>
+    <string name="local_socks5_title">本机 SOCKS5（10001 走 WiFi / 10002 走 4G）</string>
+    <string name="socks5_notification_title">本机 SOCKS5 服务</string>
+    <string name="socks5_notification_content">监听 %1$d（WiFi）和 %2$d（4G）</string>
     <string name="notification_permission_denied_message">通知权限未授予，后台运行通知将无法显示</string>
     <string name="notification_permission_action_settings">去设置</string>
     <string name="config_display_value">%1$s：%2$s</string>

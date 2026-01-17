@@ -79,6 +79,8 @@ import io.github.acedroidx.frp.ui.theme.FrpTheme
 import io.github.acedroidx.frp.ui.theme.ThemeModeKeys
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -86,6 +88,7 @@ import java.util.Locale
 import androidx.compose.runtime.collectAsState
 
 class MainActivity : ComponentActivity() {
+    private val frpcSingleConfigFileName = "frpc.toml"
     private val isStartup = MutableStateFlow(false)
     private val frpcConfigList = MutableStateFlow<List<FrpConfig>>(emptyList())
     private val frpsConfigList = MutableStateFlow<List<FrpConfig>>(emptyList())
@@ -202,7 +205,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val currentTheme by themeMode.collectAsStateWithLifecycle(themeMode.collectAsState().value)
-            val openDialog = remember { mutableStateOf(false) }
             val snackbarHostState = remember { SnackbarHostState() }
 
             FrpTheme(themeMode = currentTheme) {
@@ -232,13 +234,13 @@ class MainActivity : ComponentActivity() {
                     })
                 }, floatingActionButton = {
                     FloatingActionButton(
-                        onClick = { openDialog.value = true },
+                        onClick = { fetchMainFrpcConfigAndUpdate() },
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     ) {
                         Icon(
                             painter = painterResource(id = R.drawable.baseline_add_24),
-                            contentDescription = stringResource(R.string.addConfigButton),
+                            contentDescription = stringResource(R.string.fetch_config_button),
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
@@ -256,9 +258,6 @@ class MainActivity : ComponentActivity() {
                     ) {
                         MainContent()
                     }
-                }
-                if (openDialog.value) {
-                    CreateConfigDialog { openDialog.value = false }
                 }
             }
         }
@@ -635,6 +634,45 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun fetchMainFrpcConfigAndUpdate() {
+        val frpcDir = FrpType.FRPC.getDir(this)
+        if (!frpcDir.exists()) {
+            frpcDir.mkdirs()
+        }
+        val file = File(frpcDir, frpcSingleConfigFileName)
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                RemoteConfigFetcher.fetchConfig(this@MainActivity)
+            }
+            result.onSuccess { content ->
+                try {
+                    withContext(Dispatchers.IO) {
+                        file.writeText(content)
+                    }
+                    ensureSingleFrpcConfig(frpcDir)
+                    updateConfigList()
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.toast_fetch_config_success),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.toast_fetch_config_failed, e.message ?: ""),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }.onFailure { e ->
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.toast_fetch_config_failed, e.message ?: ""),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         // 从 SharedPreferences 重新加载主题设置
@@ -688,6 +726,66 @@ class MainActivity : ComponentActivity() {
                 } else {
                     Log.e("adx", "Failed to move: ${file.name}")
                 }
+            }
+        }
+
+        ensureSingleFrpcConfig(frpcDir)
+        ensureDefaultFrpcConfig(frpcDir)
+    }
+
+    private fun ensureSingleFrpcConfig(frpcDir: File) {
+        val target = File(frpcDir, frpcSingleConfigFileName)
+        val files = frpcDir.listFiles()?.filter { it.isFile }.orEmpty()
+        if (files.isEmpty()) return
+
+        if (!target.exists()) {
+            val first = files.sortedBy { it.name }.firstOrNull() ?: return
+            if (first.absolutePath != target.absolutePath) {
+                first.renameTo(target)
+            }
+        }
+
+        frpcDir.listFiles()?.forEach { file ->
+            if (file.isFile && file.name != frpcSingleConfigFileName) {
+                file.delete()
+            }
+        }
+    }
+
+    private fun ensureDefaultFrpcConfig(frpcDir: File) {
+        val file = File(frpcDir, frpcSingleConfigFileName)
+        if (file.exists()) return
+
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                RemoteConfigFetcher.fetchConfig(this@MainActivity)
+            }
+            result.onSuccess { content ->
+                try {
+                    withContext(Dispatchers.IO) {
+                        file.writeText(content)
+                    }
+                    updateConfigList()
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.toast_fetch_config_success),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } catch (e: Exception) {
+                    Log.e("MainActivity", "Write default config failed: ${e.message}")
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.toast_fetch_config_failed, e.message ?: ""),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }.onFailure { e ->
+                Log.e("MainActivity", "Fetch default config failed: ${e.message}")
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.toast_fetch_config_failed, e.message ?: ""),
+                    Toast.LENGTH_LONG
+                ).show()
             }
         }
     }
@@ -781,8 +879,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun updateConfigList() {
-        frpcConfigList.value = (FrpType.FRPC.getDir(this).list()?.toList() ?: listOf()).map {
-            FrpConfig(FrpType.FRPC, it)
+        val frpcDir = FrpType.FRPC.getDir(this)
+        ensureSingleFrpcConfig(frpcDir)
+        val frpcFile = File(frpcDir, frpcSingleConfigFileName)
+        frpcConfigList.value = if (frpcFile.exists()) {
+            listOf(FrpConfig(FrpType.FRPC, frpcSingleConfigFileName))
+        } else {
+            emptyList()
         }
         frpsConfigList.value = (FrpType.FRPS.getDir(this).list()?.toList() ?: listOf()).map {
             FrpConfig(FrpType.FRPS, it)
