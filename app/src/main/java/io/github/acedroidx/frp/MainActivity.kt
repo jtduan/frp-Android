@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.os.SystemClock
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -83,8 +84,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.HttpURLConnection
 import java.net.InetSocketAddress
+import java.net.Proxy
 import java.net.Socket
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -312,11 +316,47 @@ class MainActivity : ComponentActivity() {
         val wifiPortOpen = remember { mutableStateOf(false) }
         val cellPortOpen = remember { mutableStateOf(false) }
 
+        val wifiPublicIp = remember { mutableStateOf<String?>(null) }
+        val cellPublicIp = remember { mutableStateOf<String?>(null) }
+
+        // 通过 socks5 代理获取公网 IP（仅在端口打开后触发；并做节流，避免频繁请求）
+        val wifiLastFetchMs = remember { mutableStateOf(0L) }
+        val cellLastFetchMs = remember { mutableStateOf(0L) }
+
         LaunchedEffect(Unit) {
             while (true) {
                 wifiPortOpen.value = isLocalPortOpen(10001)
                 cellPortOpen.value = isLocalPortOpen(10002)
+
+                if (!wifiPortOpen.value) {
+                    wifiPublicIp.value = null
+                }
+                if (!cellPortOpen.value) {
+                    cellPublicIp.value = null
+                }
                 delay(1000)
+            }
+        }
+
+        LaunchedEffect(wifiPortOpen.value) {
+            if (wifiPortOpen.value && wifiPublicIp.value.isNullOrBlank()) {
+                val now = SystemClock.elapsedRealtime()
+                if (now - wifiLastFetchMs.value >= 10_000L) {
+                    wifiLastFetchMs.value = now
+                    // 使用 10001 端口对应的 socks5 代理访问 myip.ipip.net 并解析公网 IP
+                    wifiPublicIp.value = fetchPublicIpViaSocks5(10001)
+                }
+            }
+        }
+
+        LaunchedEffect(cellPortOpen.value) {
+            if (cellPortOpen.value && cellPublicIp.value.isNullOrBlank()) {
+                val now = SystemClock.elapsedRealtime()
+                if (now - cellLastFetchMs.value >= 10_000L) {
+                    cellLastFetchMs.value = now
+                    // 使用 10002 端口对应的 socks5 代理访问 myip.ipip.net 并解析公网 IP
+                    cellPublicIp.value = fetchPublicIpViaSocks5(10002)
+                }
             }
         }
 
@@ -333,12 +373,14 @@ class MainActivity : ComponentActivity() {
                     style = MaterialTheme.typography.titleMedium
                 )
                 Text(
-                    text = "10001: ${if (wifiPortOpen.value) "已开启" else "未开启"}",
+                    text = "10001: ${if (wifiPortOpen.value) "已开启" + (wifiPublicIp.value?.let { " ($it)" }
+                        ?: "") else "未开启"}",
                     color = if (wifiPortOpen.value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    text = "10002: ${if (cellPortOpen.value) "已开启" else "未开启"}",
+                    text = "10002: ${if (cellPortOpen.value) "已开启" + (cellPublicIp.value?.let { " ($it)" }
+                        ?: "") else "未开启"}",
                     color = if (cellPortOpen.value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -357,6 +399,37 @@ class MainActivity : ComponentActivity() {
                 false
             }
         }
+    }
+
+    private suspend fun fetchPublicIpViaSocks5(port: Int): String? {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
+                val url = URL("https://myip.ipip.net/ip")
+                val conn = (url.openConnection(proxy) as HttpURLConnection).apply {
+                    connectTimeout = 3_000
+                    readTimeout = 3_000
+                    requestMethod = "GET"
+                    instanceFollowRedirects = true
+                    setRequestProperty("User-Agent", "frp-Android")
+                }
+                try {
+                    val code = conn.responseCode
+                    val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                    val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                    if (code !in 200..299) return@runCatching null
+                    parseIpFromMyIpPage(body)
+                } finally {
+                    conn.disconnect()
+                }
+            }.getOrNull()
+        }
+    }
+
+    private fun parseIpFromMyIpPage(body: String): String? {
+        val ipv4 = Regex("(\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b)")
+        val ipv6 = Regex("(\\b[0-9a-fA-F]{0,4}(?::[0-9a-fA-F]{0,4}){2,7}\\b)")
+        return ipv4.find(body)?.value ?: ipv6.find(body)?.value
     }
 
     @Preview(showBackground = true)
