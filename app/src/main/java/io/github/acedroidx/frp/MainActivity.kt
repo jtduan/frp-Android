@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.os.SystemClock
+import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -24,13 +25,16 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -93,15 +97,18 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import androidx.compose.runtime.collectAsState
+import org.json.JSONArray
+import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
-    private val frpcConfigFileNameDefault = "frpc.toml"
-    private val frpcConfigFileName5g = "frpc_5g.toml"
-    private val frpcConfigFileNameWifi = "frpc_wifi.toml"
+    private val frpcConfigFileNameDefault = "default.toml"
+    private val frpcConfigFileName5g = "5g.toml"
+    private val frpcConfigFileNameWifi = "wifi.toml"
     private val isStartup = MutableStateFlow(false)
     private val frpcConfigList = MutableStateFlow<List<FrpConfig>>(emptyList())
     private val frpsConfigList = MutableStateFlow<List<FrpConfig>>(emptyList())
     private val runningConfigList = MutableStateFlow<List<FrpConfig>>(emptyList())
+    private val trafficStats = MutableStateFlow<Map<String, TrafficStat>>(emptyMap())
     private val frpVersion = MutableStateFlow("")
     private val themeMode = MutableStateFlow("")
     private val configTemplates =
@@ -154,6 +161,35 @@ class MainActivity : ComponentActivity() {
         override fun onServiceDisconnected(arg0: ComponentName) {
             mBound = false
         }
+    }
+
+    private fun buildTrafficIdForConfig(config: FrpConfig): String {
+        // 按服务端约定生成 id。
+        // frpc.toml => <model>_<androidId>
+        // frpc_wifi.toml => <model>_<androidId>_wifi
+        // frpc_5g.toml => <model>_<androidId>_5g
+        if (config.type == FrpType.FRPC) {
+            return when (config.fileName) {
+                frpcConfigFileNameDefault -> "${normalizeDeviceModelForId()}_${getAndroidId()}"
+                frpcConfigFileNameWifi -> "${normalizeDeviceModelForId()}_${getAndroidId()}_wifi"
+                frpcConfigFileName5g -> "${normalizeDeviceModelForId()}_${getAndroidId()}_5g"
+                else -> config.fileName.removeSuffix(".toml")
+            }
+        }
+        return config.fileName.removeSuffix(".toml")
+    }
+
+    private fun getAndroidId(): String {
+        return Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID).orEmpty()
+    }
+
+    private fun normalizeDeviceModelForId(): String {
+        // 设备型号可能包含空格/特殊字符，这里做一次归一化，避免服务端/客户端拼接不一致
+        val raw = Build.MODEL.orEmpty()
+        return raw
+            .trim()
+            .replace(Regex("[^A-Za-z0-9]+"), "_")
+            .trim('_')
     }
 
     private val configActivityLauncher =
@@ -436,6 +472,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun FrpConfigItem(config: FrpConfig = FrpConfig(FrpType.FRPC, "test.toml")) {
         val runningConfigList by runningConfigList.collectAsStateWithLifecycle(emptyList())
+        val trafficStatsMap by trafficStats.collectAsStateWithLifecycle(emptyMap())
         val isRunning = runningConfigList.contains(config)
         val showLog = remember { mutableStateOf(false) }
         val showDeleteDialog = remember { mutableStateOf(false) }
@@ -447,7 +484,7 @@ class MainActivity : ComponentActivity() {
         } else {
             remember { MutableStateFlow(emptySet<FrpConfig>()) }.collectAsStateWithLifecycle(emptySet())
         }
-        val isLinkedConfig = config.type == FrpType.FRPC && (config.fileName == "frpc_wifi.toml" || config.fileName == "frpc_5g.toml")
+        val isLinkedConfig = config.type == FrpType.FRPC && (config.fileName == frpcConfigFileNameWifi || config.fileName == frpcConfigFileName5g)
         val isSwitchOn = if (isLinkedConfig) (isRunning || desiredLinkedConfigs.contains(config)) else isRunning
 
         // 监听实时配置日志
@@ -486,15 +523,44 @@ class MainActivity : ComponentActivity() {
                         .fillMaxWidth()
                         .padding(16.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(config.fileName)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(config.fileName.removeSuffix(".toml"))
                         if (isRunning) {
                             Text(
                                 stringResource(R.string.config_running),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    val configId = remember(config) { buildTrafficIdForConfig(config) }
+                    val stat = trafficStatsMap[configId]
+                    if (stat != null) {
+                        Column(
+                            modifier = Modifier
+                                .background(
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                    shape = RoundedCornerShape(6.dp)
+                                )
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            horizontalAlignment = Alignment.End
+                        ) {
+                            Text(
+                                text = "连接中: ${stat.currentConnections}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "累计流量: ${stat.totalTraffic}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "今日流量: ${stat.todayTraffic}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -1046,6 +1112,10 @@ class MainActivity : ComponentActivity() {
             FrpConfig(FrpType.FRPS, it)
         }
 
+        // 刷新配置列表后，同步拉取流量统计。
+        // 这里按文件名(去掉 .toml)作为 id 参数，与服务端约定保持一致。
+        fetchTrafficStatsForCurrentConfigs()
+
         // 检查自启动列表中是否含有已经删除的配置
         val frpcAutoStartList =
             preferences.getStringSet(PreferencesKey.AUTO_START_FRPC_LIST, emptySet())?.filter {
@@ -1065,5 +1135,190 @@ class MainActivity : ComponentActivity() {
         preferences.edit {
             putStringSet(PreferencesKey.AUTO_START_FRPS_LIST, frpsAutoStartList?.toSet())
         }
+    }
+
+    private data class TrafficStat(
+        val currentConnections: String,
+        val totalTraffic: String,
+        val todayTraffic: String,
+    )
+
+    private fun fetchTrafficStatsForCurrentConfigs() {
+        val ids = (frpcConfigList.value + frpsConfigList.value)
+            .map { buildTrafficIdForConfig(it) }
+            .filter { it.isNotBlank() }
+            .distinct()
+
+        if (ids.isEmpty()) {
+            trafficStats.value = emptyMap()
+            return
+        }
+
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                fetchTrafficStats(ids)
+            }
+            result.onSuccess { map ->
+                trafficStats.value = map
+            }.onFailure {
+                // 拉取失败不影响主功能；保持旧值（避免 UI 抖动）
+                Log.e("MainActivity", "Fetch traffic failed: ${it.message}")
+            }
+        }
+    }
+
+    private fun fetchTrafficStats(ids: List<String>): Result<Map<String, TrafficStat>> {
+        return runCatching {
+            val urlStr = buildTrafficUrl(ids)
+            val url = URL(urlStr)
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000
+                readTimeout = 15_000
+                requestMethod = "GET"
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", "frp-Android")
+            }
+            try {
+                val code = conn.responseCode
+                val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                if (code !in 200..299) {
+                    error("HTTP $code: ${body.take(200)}")
+                }
+                parseTrafficResponse(body)
+            } finally {
+                conn.disconnect()
+            }
+        }
+    }
+
+    private fun buildTrafficUrl(ids: List<String>): String {
+        val base = "http://8.152.221.172:8080/frp/traffic"
+        val query = ids.joinToString(separator = "&") {
+            "id=${java.net.URLEncoder.encode(it, "UTF-8")}" 
+        }
+        return "$base?$query"
+    }
+
+    private fun parseTrafficResponse(body: String): Map<String, TrafficStat> {
+        // 兼容不同返回结构：
+        // 1) root = JSONArray: [{id:.., ...}, ...]
+        // 2) root = JSONObject: {data:[...] } 或 {data:{id:{...}}} 或 {id:{...}}
+        val trimmed = body.trim()
+        if (trimmed.isEmpty()) return emptyMap()
+
+        return if (trimmed.startsWith("[")) {
+            parseTrafficArray(JSONArray(trimmed))
+        } else {
+            val obj = JSONObject(trimmed)
+            val data = obj.opt("data")
+            when (data) {
+                is JSONArray -> parseTrafficArray(data)
+                is JSONObject -> parseTrafficObject(data)
+                else -> parseTrafficObject(obj)
+            }
+        }
+    }
+
+    private fun parseTrafficArray(arr: JSONArray): Map<String, TrafficStat> {
+        val map = linkedMapOf<String, TrafficStat>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val id = o.optString("id").ifBlank { o.optString("name") }.ifBlank { continue }
+            val stat = extractTrafficStat(o)
+            map[id] = stat
+        }
+        return map
+    }
+
+    private fun parseTrafficObject(obj: JSONObject): Map<String, TrafficStat> {
+        val map = linkedMapOf<String, TrafficStat>()
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val id = keys.next()
+            val v = obj.opt(id)
+            val statObj = when (v) {
+                is JSONObject -> v
+                else -> null
+            } ?: continue
+            map[id] = extractTrafficStat(statObj)
+        }
+        return map
+    }
+
+    private fun extractTrafficStat(o: JSONObject): TrafficStat {
+        // 字段名尽量做兼容；服务端如果返回的是数字/字符串，这里都转成字符串展示。
+        val current = o.opt("currentConnections")
+            ?: o.opt("current")
+            ?: o.opt("connections")
+            ?: o.opt("conn")
+            ?: o.opt("curConns")
+        val total = o.opt("totalTraffic")
+            ?: o.opt("total")
+            ?: o.opt("totalBytes")
+            ?: o.opt("sum")
+        val today = o.opt("todayTraffic")
+            ?: o.opt("today")
+            ?: o.opt("todayBytes")
+
+        // 兼容 in/out 拆分字段；并按 bit -> Byte(除以8) 后做动态单位展示
+        val totalInBits = getOptLong(o, "totalTrafficIn")
+        val totalOutBits = getOptLong(o, "totalTrafficOut")
+        val todayInBits = getOptLong(o, "todayTrafficIn")
+        val todayOutBits = getOptLong(o, "todayTrafficOut")
+
+        val totalText = when {
+            totalInBits != null || totalOutBits != null -> {
+                val sumBits = (totalInBits ?: 0L) + (totalOutBits ?: 0L)
+                formatTrafficBitsToHuman(sumBits)
+            }
+            else -> todayOrTotalFallbackToString(total)
+        }
+
+        val todayText = when {
+            todayInBits != null || todayOutBits != null -> {
+                val sumBits = (todayInBits ?: 0L) + (todayOutBits ?: 0L)
+                formatTrafficBitsToHuman(sumBits)
+            }
+            else -> todayOrTotalFallbackToString(today)
+        }
+
+        return TrafficStat(
+            currentConnections = current?.toString() ?: "-",
+            totalTraffic = totalText,
+            todayTraffic = todayText,
+        )
+    }
+
+    private fun todayOrTotalFallbackToString(v: Any?): String {
+        return v?.toString() ?: "-"
+    }
+
+    private fun getOptLong(o: JSONObject, key: String): Long? {
+        if (!o.has(key) || o.isNull(key)) return null
+        val v = o.opt(key)
+        return when (v) {
+            is Number -> v.toLong()
+            is String -> v.toLongOrNull()
+            else -> v?.toString()?.toLongOrNull()
+        }
+    }
+
+    private fun formatTrafficBitsToHuman(bits: Long): String {
+        // 服务端返回单位为 bit，需要除以 8 转为 Byte 再展示。
+        val bytes = bits.toDouble() / 8.0
+        val units = arrayOf("B", "K", "M")
+        var value = bytes
+        var unitIndex = 0
+        while (value >= 1024.0 && unitIndex < units.size - 1) {
+            value /= 1024.0
+            unitIndex++
+        }
+        val text = if (unitIndex == 0) {
+            String.format(Locale.US, "%.0f", value)
+        } else {
+            String.format(Locale.US, "%.1f", value).removeSuffix(".0")
+        }
+        return "$text ${units[unitIndex]}"
     }
 }

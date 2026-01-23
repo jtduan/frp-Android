@@ -35,8 +35,8 @@ class ShellService : LifecycleService() {
     companion object {
         private const val MAX_LOG_LINES = 50
 
-        private const val FRPC_CONFIG_CELL_5G = "frpc_5g.toml"
-        private const val FRPC_CONFIG_WIFI = "frpc_wifi.toml"
+        private const val FRPC_CONFIG_CELL_5G = "5g.toml"
+        private const val FRPC_CONFIG_WIFI = "wifi.toml"
     }
 
     private val _processThreads = MutableStateFlow(mutableMapOf<FrpConfig, ShellThread>())
