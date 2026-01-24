@@ -1330,8 +1330,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun formatTrafficBitsToHuman(bits: Long): String {
-        // 服务端返回单位为 bit，需要除以 8 转为 Byte 再展示。
-        val bytes = bits.toDouble() / 8.0
+        // 服务端返回单位为B
+        val bytes = bits.toDouble();
         val units = arrayOf("B", "K", "M")
         var value = bytes
         var unitIndex = 0
