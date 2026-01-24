@@ -375,24 +375,49 @@ class MainActivity : ComponentActivity() {
         }
 
         LaunchedEffect(wifiPortOpen.value) {
-            if (wifiPortOpen.value && wifiPublicIp.value.isNullOrBlank()) {
-                val now = SystemClock.elapsedRealtime()
-                if (now - wifiLastFetchMs.value >= 10_000L) {
-                    wifiLastFetchMs.value = now
-                    // 使用 10001 端口对应的 socks5 代理访问 myip.ipip.net 并解析公网 IP
-                    wifiPublicIp.value = fetchPublicIpViaSocks5(10001)
+            // 端口为“开启”时保持轮询：避免首次获取失败后，IP 一直不刷新
+            while (wifiPortOpen.value) {
+                if (wifiPublicIp.value.isNullOrBlank()) {
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - wifiLastFetchMs.value >= 10_000L) {
+                        wifiLastFetchMs.value = now
+                        // 使用 10001 端口对应的 socks5 代理访问 myip.ipip.net 并解析公网 IP
+                        val retryDelays = longArrayOf(0L, 600L, 1200L, 2000L)
+                        for (d in retryDelays) {
+                            if (!wifiPortOpen.value) break
+                            if (d > 0) delay(d)
+                            val ip = fetchPublicIpViaSocks5(10001)
+                            if (!ip.isNullOrBlank()) {
+                                wifiPublicIp.value = ip
+                                break
+                            }
+                        }
+                    }
                 }
+                delay(1000)
             }
         }
 
         LaunchedEffect(cellPortOpen.value) {
-            if (cellPortOpen.value && cellPublicIp.value.isNullOrBlank()) {
-                val now = SystemClock.elapsedRealtime()
-                if (now - cellLastFetchMs.value >= 10_000L) {
-                    cellLastFetchMs.value = now
-                    // 使用 10002 端口对应的 socks5 代理访问 myip.ipip.net 并解析公网 IP
-                    cellPublicIp.value = fetchPublicIpViaSocks5(10002)
+            while (cellPortOpen.value) {
+                if (cellPublicIp.value.isNullOrBlank()) {
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - cellLastFetchMs.value >= 10_000L) {
+                        cellLastFetchMs.value = now
+                        // 使用 10002 端口对应的 socks5 代理访问 myip.ipip.net 并解析公网 IP
+                        val retryDelays = longArrayOf(0L, 600L, 1200L, 2000L)
+                        for (d in retryDelays) {
+                            if (!cellPortOpen.value) break
+                            if (d > 0) delay(d)
+                            val ip = fetchPublicIpViaSocks5(10002)
+                            if (!ip.isNullOrBlank()) {
+                                cellPublicIp.value = ip
+                                break
+                            }
+                        }
+                    }
                 }
+                delay(1000)
             }
         }
 
@@ -1193,7 +1218,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun buildTrafficUrl(ids: List<String>): String {
-        val base = "http://82.157.207.145:8080/frp/traffic"
+        val base = "http://82.157.207.145:8080/client/frp/traffic"
         val query = ids.joinToString(separator = "&") {
             "id=${java.net.URLEncoder.encode(it, "UTF-8")}" 
         }
