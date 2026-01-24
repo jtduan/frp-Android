@@ -1193,7 +1193,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun buildTrafficUrl(ids: List<String>): String {
-        val base = "http://8.152.221.172:8080/frp/traffic"
+        val base = "http://82.157.207.145:8080/frp/traffic"
         val query = ids.joinToString(separator = "&") {
             "id=${java.net.URLEncoder.encode(it, "UTF-8")}" 
         }

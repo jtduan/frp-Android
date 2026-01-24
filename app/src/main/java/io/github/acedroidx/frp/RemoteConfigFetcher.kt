@@ -7,7 +7,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 object RemoteConfigFetcher {
-    private const val BASE_URL = "http://8.152.221.172:8080/generate_config"
+    private const val BASE_URL = "http://82.157.207.145:8080/generate_config"
 
     fun buildUrl(context: Context, type: String? = null): String {
         val model = Build.MODEL
