@@ -28,11 +28,30 @@ jobs:
       - name: Add build-tools to PATH
         run: echo "$ANDROID_HOME/build-tools/36.1.0" >> "$GITHUB_PATH"
 
+      - name: Validate release signing secrets
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          STORE_FILE: ${{ secrets.STORE_FILE }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for k in KEY_ALIAS KEY_PASSWORD STORE_FILE STORE_PASSWORD; do
+            if [ -z "${!k:-}" ]; then
+              echo "Missing required secret: $k" >&2
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Release signing secrets are required. Refuse to build with debug fallback to keep signatures stable." >&2
+            exit 1
+          fi
+
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/using-secrets-in-github-actions#storing-base64-binary-blobs-as-secrets
       - name: Retrieve the secret and decode it to a file
         env:
           STORE_FILE: ${{ secrets.STORE_FILE }}
-        if: env.STORE_FILE != ''
         run: |
           echo $STORE_FILE | base64 --decode > keystore.jks
       - name: Retrieve the key rotation files and decode them to files
@@ -44,9 +63,6 @@ jobs:
         run: |
           echo $NEW_STORE_FILE | base64 --decode > new_keystore.jks
           echo $LINEAGE | base64 --decode > lineage
-
-      - name: Generate blank keystore.properties to bypass gradle check
-        run: touch keystore.properties
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -112,6 +128,7 @@ jobs:
               --ks-pass env:STORE_PASSWORD \
               --key-pass env:KEY_PASSWORD \
               --lineage lineage \
+              --v4-signing-enabled false \
               "$apk"
           done
 
